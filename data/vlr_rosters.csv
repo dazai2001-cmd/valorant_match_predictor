@@ -1,0 +1,78 @@
+team,player,player_id,player_url,real_name,roster_role,status,is_active_player,is_staff,team_url,scraped_at
+G2 Esports,valyn,3885,https://www.vlr.gg/player/3885/valyn,Jacob Batio,active,active,True,False,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
+G2 Esports,jawgemo,3993,https://www.vlr.gg/player/3993/jawgemo,Alexander Mor,active,active,True,False,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
+G2 Esports,BABYBAY,2170,https://www.vlr.gg/player/2170/babybay,Andrej Francisty,active,active,True,False,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
+G2 Esports,trent,15500,https://www.vlr.gg/player/15500/trent,Trent Cairns,active,active,True,False,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
+G2 Esports,leaf,7873,https://www.vlr.gg/player/7873/leaf,Nathan Orf,active,active,True,False,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
+G2 Esports,Ambrose,63508,https://www.vlr.gg/player/63508/ambrose,Ambrose Lai,manager,manager,False,True,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
+G2 Esports,JoshRT,52,https://www.vlr.gg/player/52/joshrt,Josh Lee,head coach,head coach,False,True,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
+G2 Esports,shhhack,6899,https://www.vlr.gg/player/6899/shhhack,Peter Belej,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
+G2 Esports,Robert,61050,https://www.vlr.gg/player/61050/robert,Robert Yip,performance coach,performance coach,False,True,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
+Xi Lai Gaming,WsLeo,24308,https://www.vlr.gg/player/24308/wsleo,Huang Pinwei (黄品维),active,active,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
+Xi Lai Gaming,Lysoar,37489,https://www.vlr.gg/player/37489/lysoar,Liang Youhao (梁优好),active,active,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
+Xi Lai Gaming,NoMan,11527,https://www.vlr.gg/player/11527/noman,James Man,active,active,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
+Xi Lai Gaming,Rarga,22047,https://www.vlr.gg/player/22047/rarga,Arthur Churyumov,active,active,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
+Xi Lai Gaming,happywei,37927,https://www.vlr.gg/player/37927/happywei,Deng Minwei (邓闵维),active,active,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
+Xi Lai Gaming,Arty,4343,https://www.vlr.gg/player/4343/arty,Yang Zhe (杨喆),manager,manager,False,True,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
+Xi Lai Gaming,hvoya,1348,https://www.vlr.gg/player/1348/hvoya,Aleksandr Eremin,head coach,head coach,False,True,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
+Xi Lai Gaming,steady,1874,https://www.vlr.gg/player/1874/steady,Dmitry Prutkov,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
+Xi Lai Gaming,Coffin0,50163,https://www.vlr.gg/player/50163/coffin0,Tao Yumeng (陶禹萌),staff,staff,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
+Fnatic,Boaster,438,https://www.vlr.gg/player/438/boaster,Jake Howlett,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
+Fnatic,crashies,4,https://www.vlr.gg/player/4/crashies,Austin Roberts,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
+Fnatic,kaajak,9554,https://www.vlr.gg/player/9554/kaajak,Kajetan Haremski,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
+Fnatic,Veqaj,12928,https://www.vlr.gg/player/12928/veqaj,Sylvain Pattyn,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
+Fnatic,Cloud,4181,https://www.vlr.gg/player/4181/cloud,Kirill Nehozhin,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
+Fnatic,Alfajer,9810,https://www.vlr.gg/player/9810/alfajer,Emir Ali Beder,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
+Fnatic,CoJo,18972,https://www.vlr.gg/player/18972/cojo,Colin Johnson,manager,manager,False,True,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
+Fnatic,ENGH,460,https://www.vlr.gg/player/460/engh,Andrey Sholokhov,head coach,head coach,False,True,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
+Fnatic,Desmo,195,https://www.vlr.gg/player/195/desmo,Casper Rasmussen,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
+Fnatic,Szed,53027,https://www.vlr.gg/player/53027/szed,Philipp Schickor,performance coach,performance coach,False,True,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
+Fnatic,Milan,4010,https://www.vlr.gg/player/4010/milan,Milan de Meij,head coach,head coach,False,True,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
+Rex Regum Qeon,crazyguy,1430,https://www.vlr.gg/player/1430/crazyguy,Ngô Công Anh,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
+Rex Regum Qeon,Monyet,8497,https://www.vlr.gg/player/8497/monyet,Cahya Nugraha,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
+Rex Regum Qeon,xffero,4871,https://www.vlr.gg/player/4871/xffero,David Monangin,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
+Rex Regum Qeon,Xan,11737,https://www.vlr.gg/player/11737/xan,Xan Ng,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
+Rex Regum Qeon,Jemkin,24895,https://www.vlr.gg/player/24895/jemkin,Maksim Batorov,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
+Rex Regum Qeon,Kushy,4866,https://www.vlr.gg/player/4866/kushy,Bryan Carlos Setiawan,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
+Rex Regum Qeon,SeasoNz,61084,https://www.vlr.gg/player/61084/seasonz,Joe Lai,manager,manager,False,True,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
+Rex Regum Qeon,Jovi,6570,https://www.vlr.gg/player/6570/jovi,Jovanni Vera,head coach,head coach,False,True,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
+Rex Regum Qeon,Warbirds,12224,https://www.vlr.gg/player/12224/warbirds,Evan Olzem,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
+Rex Regum Qeon,Rebecca,50175,https://www.vlr.gg/player/50175/rebecca,Rebecca Wong,performance coach,performance coach,False,True,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
+Rex Regum Qeon,Jomengz,62037,https://www.vlr.gg/player/62037/jomengz,Jonathan Hoo,staff,staff,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
+Gen.G,Ash,25017,https://www.vlr.gg/player/25017/ash,Ha Hyun-cheol (하현철),active,active,True,False,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
+Gen.G,Karon,34974,https://www.vlr.gg/player/34974/karon,Kim Won-tae (김원태),active,active,True,False,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
+Gen.G,t3xture,9196,https://www.vlr.gg/player/9196/t3xture,Kim Na-ra (김나라),active,active,True,False,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
+Gen.G,Efina,985,https://www.vlr.gg/player/985/efina,Kim Nak-yeon (김낙연),active,active,True,False,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
+Gen.G,Raxcal,48925,https://www.vlr.gg/player/48925/raxcal,Kim Min-seok (김민석),active,active,True,False,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
+Gen.G,Xiesta,62291,https://www.vlr.gg/player/62291/xiesta,Jung Si-hwan (정시환),Inactive,inactive,False,False,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
+Gen.G,ZynX,51099,https://www.vlr.gg/player/51099/zynx,Kim Dong-ha (김동하),Inactive,inactive,False,False,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
+Gen.G,solo,4562,https://www.vlr.gg/player/4562/solo,Kang Geun-chul (강근철),head coach,head coach,False,True,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
+Gen.G,HSK,21792,https://www.vlr.gg/player/21792/hsk,Kim Hae-seong (김해성),coach,coach,False,True,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
+Gen.G,peri,4560,https://www.vlr.gg/player/4560/peri,Jung Bum-ki (정범기),coach,coach,False,True,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
+Sentinels,johnqt,1265,https://www.vlr.gg/player/1265/johnqt,Mohamed Amine Ouarid,active,active,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
+Sentinels,Reduxx,8419,https://www.vlr.gg/player/8419/reduxx,Yassin Aboulalazm,active,active,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
+Sentinels,Jerrwin,34057,https://www.vlr.gg/player/34057/jerrwin,Gurjiwan Gill,active,active,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
+Sentinels,cortezia,5395,https://www.vlr.gg/player/5395/cortezia,Gabriel Cortez,active,active,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
+Sentinels,JonahP,4581,https://www.vlr.gg/player/4581/jonahp,Jonah Pulice,active,active,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
+Sentinels,Victor,261,https://www.vlr.gg/player/261/victor,Victor Wong,stand-in,stand-in,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
+Sentinels,Zyto,47462,https://www.vlr.gg/player/47462/zyto,Bryan Ybanez,manager,manager,False,True,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
+Sentinels,Ewok,8347,https://www.vlr.gg/player/8347/ewok,Marthinus Jacobus Van Der Walt,head coach,head coach,False,True,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
+Sentinels,GUNTER,28113,https://www.vlr.gg/player/28113/gunter,Luke Clives,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
+Wolves Esports,glacier,49973,https://www.vlr.gg/player/49973/glacier,Liang Zhekai (梁哲恺),active,active,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
+Wolves Esports,yosemite,6022,https://www.vlr.gg/player/6022/yosemite,Wang Lei (王磊),active,active,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
+Wolves Esports,Spring,14125,https://www.vlr.gg/player/14125/spring,Liu Jiunting (刘俊霆),active,active,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
+Wolves Esports,Deryeon,9152,https://www.vlr.gg/player/9152/deryeon,Derrick Yee,active,active,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
+Wolves Esports,aluba,14441,https://www.vlr.gg/player/14441/aluba,Zhong Haojun (钟皓钧),active,active,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
+Wolves Esports,nothing,66083,https://www.vlr.gg/player/66083/nothing,Xie Junzheng (谢君正),Sub,sub,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
+Wolves Esports,Chao,61329,https://www.vlr.gg/player/61329/chao,,manager,manager,False,True,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
+Wolves Esports,alexRr,1163,https://www.vlr.gg/player/1163/alexrr,Alexander Frisch,head coach,head coach,False,True,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
+Wolves Esports,Ja7,61330,https://www.vlr.gg/player/61330/ja7,,staff,staff,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
+Paper Rex,invy,8504,https://www.vlr.gg/player/8504/invy,Adrian Jiggs Reyes,active,active,True,False,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
+Paper Rex,Jinggg,7378,https://www.vlr.gg/player/7378/jinggg,Wang Jing Jie,active,active,True,False,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
+Paper Rex,f0rsakeN,9801,https://www.vlr.gg/player/9801/f0rsaken,Jason Susanto,active,active,True,False,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
+Paper Rex,d4v41,9803,https://www.vlr.gg/player/9803/d4v41,Khalish Rusyaidee,active,active,True,False,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
+Paper Rex,something,17086,https://www.vlr.gg/player/17086/something,Ilya Petrov,active,active,True,False,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
+Paper Rex,Tommy,9799,https://www.vlr.gg/player/9799/tommy,Kumaresan Ramani,manager,manager,False,True,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
+Paper Rex,alecks,9804,https://www.vlr.gg/player/9804/alecks,Alexandre Sallé,coach,coach,False,True,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
+Paper Rex,Wendler,55829,https://www.vlr.gg/player/55829/wendler,Ashton Wendler,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
+Paper Rex,Panda,54678,https://www.vlr.gg/player/54678/panda,Laijhun Cheng,performance coach,performance coach,False,True,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15

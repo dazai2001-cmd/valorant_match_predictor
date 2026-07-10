@@ -1,0 +1,21 @@
+{
+  "trained_at": "2026-07-10T02:26:53",
+  "matches_csv": "C:\\Users\\Rahul\\Desktop\\valo0rant match predictor\\data\\vlr_matches.csv",
+  "season_year": 2026,
+  "recent_days": 60,
+  "fallback_years": 1,
+  "min_player_history_maps": 3,
+  "player_training_rows": 40,
+  "team_training_rows": 2,
+  "player_metrics": {
+    "status": "trained",
+    "rows": 40,
+    "validation_rows": 10,
+    "mae": 0.16827798092559196,
+    "r2": -0.15950286628302868
+  },
+  "team_metrics": {
+    "status": "skipped",
+    "reason": "Need at least 6 team training rows."
+  }
+}
