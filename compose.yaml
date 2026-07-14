@@ -1,0 +1,11 @@
+services:
+  vlrggapi:
+    build:
+      context: .
+      dockerfile: infra/vlrggapi/Dockerfile
+      args:
+        VLRGGAPI_COMMIT: a6075fec9757ae5394c9a50002ba40270f4a5d00
+    container_name: valorant-predictor-vlrggapi
+    ports:
+      - "127.0.0.1:3001:3001"
+    restart: unless-stopped

@@ -7,16 +7,16 @@ from ..config import MATCHES_CSV, NEWS_CSV, PREDICTIONS_CSV, ROSTERS_CSV
 from ..features.form_calculations import build_player_profiles as build_form_profiles
 from ..features.form_calculations import build_player_profiles_from_rosters
 from ..features.form_calculations import clean_match_data
-from ..features.form_calculations import filter_matches_by_time
+from ..features.form_calculations import filter_curated_competition_history
 from ..features.news_impact import player_news_adjustments
-from ..team_registry import registry_team_pages
+from ..team_registry import filter_registry_tier1_matchups, registry_team_pages
 from ..training.model_inference import apply_player_model
-from ..vlr_client import scrape_matches, scrape_news, scrape_rosters
+from ..vlr_client import canonicalize_match_dataframe, scrape_matches, scrape_news, scrape_rosters
 
 
 def load_csv(path: str) -> pd.DataFrame:
     try:
-        return pd.read_csv(path)
+        return pd.read_csv(path, low_memory=False)
     except (FileNotFoundError, pd.errors.EmptyDataError):
         return pd.DataFrame()
 
@@ -78,6 +78,8 @@ def apply_news(profiles: pd.DataFrame, news: pd.DataFrame, recent_days: int) -> 
 
     output = profiles.copy()
     output["news_adjustment"] = 0.0
+    output["news_availability_adjustment"] = 0.0
+    output["news_uncertainty_adjustment"] = 0.0
     output["news_reasons"] = ""
     output["news_urls"] = ""
 
@@ -87,6 +89,8 @@ def apply_news(profiles: pd.DataFrame, news: pd.DataFrame, recent_days: int) -> 
             continue
 
         output.at[index, "news_adjustment"] = payload["adjustment"]
+        output.at[index, "news_availability_adjustment"] = payload.get("availability_adjustment", 0.0)
+        output.at[index, "news_uncertainty_adjustment"] = payload.get("uncertainty_adjustment", 0.0)
         reasons = []
         urls = []
         for reason in payload["reasons"][:5]:
@@ -97,8 +101,69 @@ def apply_news(profiles: pd.DataFrame, news: pd.DataFrame, recent_days: int) -> 
         output.at[index, "news_reasons"] = " | ".join(reasons)
         output.at[index, "news_urls"] = " | ".join(dict.fromkeys(urls))
 
+    base_roster_uncertainty = pd.to_numeric(
+        output["roster_uncertainty"] if "roster_uncertainty" in output.columns else 0.0,
+        errors="coerce",
+    )
+    if not isinstance(base_roster_uncertainty, pd.Series):
+        base_roster_uncertainty = pd.Series(base_roster_uncertainty, index=output.index, dtype=float)
+    output["combined_roster_uncertainty"] = (
+        base_roster_uncertainty.fillna(0.0) + output["news_uncertainty_adjustment"]
+    ).clip(lower=0.0, upper=0.45)
+    output["availability_probability"] = (
+        1.0 + output["news_availability_adjustment"]
+    ).clip(lower=0.05, upper=1.0)
+    output["lineup_certainty"] = (
+        (1.0 - output["combined_roster_uncertainty"])
+        * output["availability_probability"]
+    ).clip(lower=0.0, upper=1.0)
+    if "data_reliability" in output.columns:
+        output["reliability"] = output["data_reliability"] * output["lineup_certainty"]
+
     output["predicted_rating"] = output["base_rating"] * (1.0 + output["news_adjustment"])
     output["predicted_rating"] = output["predicted_rating"].clip(lower=0.45, upper=1.70)
+    def numeric_column(name: str, fallback: float) -> pd.Series:
+        if name not in output.columns:
+            return pd.Series(fallback, index=output.index, dtype=float)
+        return pd.to_numeric(output[name], errors="coerce").fillna(fallback)
+
+    observed_std = numeric_column("rating_std", 0.18)
+    model_std = numeric_column("trained_residual_std", 0.16)
+    data_reliability = numeric_column(
+        "data_reliability" if "data_reliability" in output.columns else "reliability",
+        0.0,
+    )
+    roster_uncertainty = numeric_column("combined_roster_uncertainty", 0.0)
+    combined_std = (0.55 * observed_std.pow(2) + 0.45 * model_std.pow(2)).pow(0.5)
+    heuristic_std = (
+        combined_std * (1.0 + 0.50 * (1.0 - data_reliability))
+        + (0.12 * roster_uncertainty)
+        + (0.08 * output["news_adjustment"].abs())
+    ).clip(lower=0.08, upper=0.45)
+    if {"trained_rating_low", "trained_rating_high"}.issubset(output.columns):
+        news_multiplier = 1.0 + output["news_adjustment"]
+        uncertainty_expansion = 0.10 * (
+            roster_uncertainty + (1.0 - data_reliability)
+        )
+        output["predicted_rating_low"] = (
+            output["trained_rating_low"] * news_multiplier - uncertainty_expansion
+        ).clip(lower=0.35, upper=1.90)
+        output["predicted_rating_high"] = (
+            output["trained_rating_high"] * news_multiplier + uncertainty_expansion
+        ).clip(lower=0.35, upper=1.90)
+        interval_std = (
+            output["predicted_rating_high"] - output["predicted_rating_low"]
+        ) / 2.563
+        output["predicted_rating_std"] = interval_std.clip(lower=0.08, upper=0.45)
+    else:
+        output["predicted_rating_std"] = heuristic_std
+        interval_width = 1.282 * output["predicted_rating_std"]
+        output["predicted_rating_low"] = (
+            output["predicted_rating"] - interval_width
+        ).clip(lower=0.35, upper=1.90)
+        output["predicted_rating_high"] = (
+            output["predicted_rating"] + interval_width
+        ).clip(lower=0.35, upper=1.90)
     return output.sort_values(["team", "predicted_rating"], ascending=[True, False])
 
 
@@ -115,13 +180,25 @@ def predict_player_ratings(
     season_year: int | None = None,
     recent_days: int | None = None,
     use_trained_models: bool = False,
+    prepared_matches: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    matches = clean_matches(load_csv(matches_csv))
-    if season_year is not None or recent_days is not None:
-        matches = filter_matches_by_time(matches, season_year=season_year, recent_days=recent_days)
+    if prepared_matches is None:
+        raw_matches = canonicalize_match_dataframe(
+            load_csv(matches_csv),
+            registry_team_pages(season_year=None),
+        )
+        matches = clean_matches(
+            filter_registry_tier1_matchups(
+                filter_curated_competition_history(raw_matches)
+            )
+        )
+        if season_year is not None and matches["match_date_sort"].notna().any():
+            matches = matches[matches["match_date_sort"].dt.year <= season_year].copy()
+    else:
+        matches = prepared_matches.copy()
     if matches.empty:
         raise ValueError(
-            "No usable match data found. Run: python scripts\\scrape.py --matches --limit-per-team 25"
+            "No usable match data found. Run: python scripts\\scrape.py --matches"
         )
 
     rosters = load_csv(rosters_csv) if use_rosters else pd.DataFrame()
@@ -138,6 +215,9 @@ def predict_player_ratings(
     news = load_csv(news_csv)
     predictions = apply_news(profiles, news, recent_news_days)
     predictions.to_csv(output_csv, index=False)
+    from ..storage import sync_dataframe
+
+    sync_dataframe("player_predictions", predictions, source=str(output_csv))
     return predictions
 
 
@@ -159,16 +239,18 @@ def main() -> None:
     parser.add_argument("--refresh-rosters", action="store_true")
     parser.add_argument("--ignore-rosters", action="store_true")
     parser.add_argument("--use-trained-models", action="store_true")
-    parser.add_argument("--limit-per-team", type=int, default=25)
+    parser.add_argument("--limit-per-team", type=int, default=0)
+    parser.add_argument("--min-team-matches", type=int, default=20)
     args = parser.parse_args()
 
     if args.refresh_matches:
         scrape_matches(
             output_csv=args.matches_csv,
-            limit_per_team=args.limit_per_team,
+            limit_per_team=args.limit_per_team or None,
             team_pages=registry_team_pages(),
             season_year=args.season_year,
             recent_days=args.recent_days,
+            min_matches_per_team=args.min_team_matches,
         )
     if args.refresh_news:
         scrape_news(output_csv=args.news_csv, pages=args.news_pages)

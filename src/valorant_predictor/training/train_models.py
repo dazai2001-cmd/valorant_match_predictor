@@ -1,29 +1,74 @@
 import argparse
+import hashlib
 import json
+import math
+import os
 import pickle
+import warnings
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
-from sklearn.linear_model import LogisticRegression, Ridge
-from sklearn.metrics import accuracy_score, log_loss, mean_absolute_error, r2_score
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
+
+# Loky clamps this to one worker and skips a broken WMIC physical-core probe.
+os.environ.setdefault("LOKY_MAX_CPU_COUNT", "0")
+warnings.filterwarnings(
+    "ignore",
+    message=r"Could not find the number of physical cores.*",
+    category=UserWarning,
+    module=r"joblib\.externals\.loky\.backend\.context",
+)
+
+from sklearn.ensemble import (
+    ExtraTreesRegressor,
+    HistGradientBoostingClassifier,
+    HistGradientBoostingRegressor,
+)
+from sklearn.isotonic import IsotonicRegression
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, mean_absolute_error, r2_score
+from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from ..config import MATCHES_CSV, MODELS_DIR, PLAYER_MODEL_PATH, TEAM_MODEL_PATH, TRAINING_METRICS_PATH
+from ..config import (
+    MATCH_COVERAGE_CSV,
+    MATCHES_CSV,
+    MAP_MODEL_PATH,
+    MODELS_DIR,
+    NEWS_CSV,
+    PLAYER_MODEL_PATH,
+    TEAM_MODEL_PATH,
+    TRAINING_METRICS_PATH,
+)
 from ..features.form_calculations import (
     clean_match_data,
+    filter_curated_competition_history,
     match_id_from_url,
+    normalize_map_name,
+    normalize_player_name,
     parse_match_datetime,
     weighted_recent_mean,
 )
-from ..team_registry import registry_team_pages
-from ..vlr_client import scrape_matches
+from ..features.team_context import (
+    SEQUENTIAL_TEAM_FEATURES,
+    build_sequential_team_context,
+    freeze_team_state,
+)
+from ..model_selection import (
+    load_model_selection,
+    normalize_model_selection,
+    save_model_selection,
+    selected_candidate as resolve_selected_candidate,
+)
+from ..team_registry import filter_registry_tier1_matchups, registry_team_pages
+from ..vlr_client import canonicalize_match_dataframe, match_coverage_report, scrape_matches
 
 
 MODEL_DIR = MODELS_DIR
 METRICS_PATH = TRAINING_METRICS_PATH
+MODEL_VERSION = "logic-v12-capped-blend-calibration"
+TRAINING_HALF_LIFE_DAYS = 365.0
 
 PLAYER_FEATURES = [
     "player_last_3_rating",
@@ -36,6 +81,12 @@ PLAYER_FEATURES = [
     "player_recent_kd",
     "player_recent_assists",
     "player_maps",
+    "player_60d_maps",
+    "player_effective_maps",
+    "player_days_since_last_match",
+    "player_freshness",
+    "player_rating_std",
+    "player_agent_pool_size",
     "team_recent_rating",
     "team_recent_win_rate",
     "opponent_recent_rating",
@@ -53,12 +104,21 @@ TEAM_FEATURES = [
     "h2h_win_rate",
     "h2h_rating_diff",
     "h2h_maps",
+    *SEQUENTIAL_TEAM_FEATURES,
+]
+
+MAP_CONTEXT_FEATURES = [
+    "map_number",
+    "map_baseline_probability",
+    "map_pick_by_team",
+    "map_pick_by_opponent",
+    "map_is_decider",
 ]
 
 
 def load_csv(path: str) -> pd.DataFrame:
     try:
-        return pd.read_csv(path)
+        return pd.read_csv(path, low_memory=False)
     except (FileNotFoundError, pd.errors.EmptyDataError):
         return pd.DataFrame()
 
@@ -68,22 +128,59 @@ def ensure_model_dir() -> None:
 
 
 def chronological_sort(df: pd.DataFrame) -> pd.DataFrame:
-    return df.sort_values(["match_date_sort", "match_id"], na_position="first").reset_index(drop=True)
+    columns = ["match_date_sort", "match_id"]
+    if "map_number" in df.columns:
+        columns.append("map_number")
+    return df.sort_values(columns, na_position="first").reset_index(drop=True)
 
 
-def restrict_history_window(df: pd.DataFrame, season_year: int | None, fallback_years: int) -> pd.DataFrame:
+def restrict_history_window(
+    df: pd.DataFrame,
+    season_year: int | None,
+    fallback_years: int | None = None,
+) -> pd.DataFrame:
     if df.empty or season_year is None or df["match_date_sort"].isna().all():
         return df
-
-    min_year = season_year - fallback_years
     years = df["match_date_sort"].dt.year
-    return df[(years >= min_year) & (years <= season_year)].copy()
+    return df[years <= season_year].copy()
 
 
 def target_rows_for_season(df: pd.DataFrame, season_year: int | None) -> pd.DataFrame:
     if df.empty or season_year is None or df["match_date_sort"].isna().all():
         return df
-    return df[df["match_date_sort"].dt.year == season_year].copy()
+    return df[df["match_date_sort"].dt.year <= season_year].copy()
+
+
+def add_training_weights(
+    frame: pd.DataFrame,
+    half_life_days: float = TRAINING_HALF_LIFE_DAYS,
+) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    output = frame.copy()
+    dates = pd.to_datetime(output["target_date"], utc=True, errors="coerce")
+    reference = dates.max()
+    if pd.isna(reference):
+        output["training_weight"] = 1.0
+        return output
+    ages = (reference - dates).dt.total_seconds().div(86400.0).clip(lower=0.0)
+    time_weight = (0.5 ** (ages / half_life_days)).fillna(0.25).clip(lower=0.05, upper=1.0)
+    importance = pd.to_numeric(
+        output.get("match_importance", 1.0),
+        errors="coerce",
+    )
+    if not isinstance(importance, pd.Series):
+        importance = pd.Series(importance, index=output.index, dtype=float)
+    competition = pd.to_numeric(
+        output.get("competition_strength_weight", 1.0),
+        errors="coerce",
+    )
+    if not isinstance(competition, pd.Series):
+        competition = pd.Series(competition, index=output.index, dtype=float)
+    output["training_weight"] = (
+        time_weight * importance.fillna(1.0) * competition.fillna(1.0)
+    ).clip(0.03, 1.15)
+    return output
 
 
 def history_before(df: pd.DataFrame, target: pd.Series) -> pd.DataFrame:
@@ -120,6 +217,12 @@ def rating_stats(history: pd.DataFrame, target: pd.Series, recent_days: int) -> 
             "recent_kd": 1.0,
             "recent_assists": 5.0,
             "maps": 0,
+            "recent_days_maps": 0,
+            "effective_maps": 0.0,
+            "days_since_last_match": 365.0,
+            "freshness": 0.0,
+            "rating_std": 0.18,
+            "agent_pool_size": 0,
         }
 
     ordered = chronological_sort(history)
@@ -142,24 +245,125 @@ def rating_stats(history: pd.DataFrame, target: pd.Series, recent_days: int) -> 
         "recent_kd": (recent["kills"] / deaths).mean(),
         "recent_assists": recent["assists"].mean(),
         "maps": len(ordered),
+        "recent_days_maps": len(recent),
+        "effective_maps": float(len(recent)),
+        "days_since_last_match": 0.0,
+        "freshness": 1.0,
+        "rating_std": float(ordered.tail(20)["rating_for_model"].std(ddof=0)) if len(ordered) > 1 else 0.18,
+        "agent_pool_size": int(
+            len(
+                {
+                    agent.strip()
+                    for value in ordered.tail(20).get("agents", pd.Series(dtype=str)).dropna().astype(str)
+                    for agent in value.split(";")
+                    if agent.strip()
+                }
+            )
+        ),
+    }
+
+
+def _weighted_array(values, decay: float = 0.85) -> float:
+    clean = np.asarray(values, dtype=float)
+    clean = clean[~np.isnan(clean)]
+    if clean.size == 0:
+        return 0.0
+    weights = decay ** np.arange(clean.size - 1, -1, -1)
+    return float(np.average(clean, weights=weights))
+
+
+def rating_stats_from_ordered(history: pd.DataFrame, target: pd.Series, recent_days: int) -> dict:
+    if history.empty:
+        return rating_stats(history, target, recent_days)
+
+    target_date = target.get("match_date_sort")
+    if pd.notna(target_date) and history["match_date_sort"].notna().any():
+        cutoff = target_date - pd.Timedelta(days=recent_days)
+        recent = history[history["match_date_sort"] >= cutoff]
+    else:
+        recent = history.tail(10)
+    if recent.empty:
+        recent = history.tail(10)
+
+    ratings = history["rating_for_model"].to_numpy(dtype=float)
+    recent_ratings = recent["rating_for_model"].to_numpy(dtype=float)
+    recent_deaths = recent["deaths"].replace(0, 1).to_numpy(dtype=float)
+    last_3 = _weighted_array(ratings[-3:])
+    last_10 = _weighted_array(ratings[-10:])
+    latest_date = history["match_date_sort"].dropna().max() if history["match_date_sort"].notna().any() else pd.NaT
+    days_since_last_match = (
+        max(0.0, float((target_date - latest_date).total_seconds() / 86400))
+        if pd.notna(target_date) and pd.notna(latest_date)
+        else 0.0
+    )
+    if pd.notna(target_date) and recent["match_date_sort"].notna().any():
+        ages = (target_date - recent["match_date_sort"]).dt.total_seconds().div(86400).clip(lower=0)
+        evidence_weights = 0.5 ** (ages / 30.0)
+        effective_maps = float(evidence_weights.sum() ** 2 / evidence_weights.pow(2).sum())
+    else:
+        effective_maps = float(len(recent))
+    volatility = float(np.nanstd(ratings[-20:])) if len(ratings) > 1 else 0.18
+    volatility_weight = min(1.0, len(ratings[-20:]) / 8.0)
+    rating_std = math.sqrt(volatility_weight * volatility**2 + (1.0 - volatility_weight) * 0.18**2)
+    agents = {
+        agent.strip()
+        for value in history.tail(20).get("agents", pd.Series(dtype=str)).dropna().astype(str)
+        for agent in value.split(";")
+        if agent.strip()
+    }
+
+    return {
+        "last_3_rating": last_3,
+        "last_5_rating": _weighted_array(ratings[-5:]),
+        "last_10_rating": last_10,
+        "recent_days_rating": _weighted_array(recent_ratings),
+        "overall_rating": float(np.nanmean(ratings)),
+        "rating_trend": last_3 - last_10,
+        "recent_acs": float(np.nanmean(recent["acs"].to_numpy(dtype=float))),
+        "recent_kd": float(np.nanmean(recent["kills"].to_numpy(dtype=float) / recent_deaths)),
+        "recent_assists": float(np.nanmean(recent["assists"].to_numpy(dtype=float))),
+        "maps": len(history),
+        "recent_days_maps": len(recent),
+        "effective_maps": effective_maps,
+        "days_since_last_match": days_since_last_match,
+        "freshness": math.exp(-days_since_last_match / 45.0),
+        "rating_std": rating_std,
+        "agent_pool_size": len(agents),
     }
 
 
 def team_rows_from_cleaned(cleaned: pd.DataFrame) -> pd.DataFrame:
     rows = []
-    for (match_url, team), group in cleaned.groupby(["match_url", "team"], sort=False):
+    for (match_key, team), group in cleaned.groupby(["match_key", "team"], sort=False):
         team_score = group["team_score"].dropna().iloc[0] if group["team_score"].notna().any() else None
         opp_score = group["opp_score"].dropna().iloc[0] if group["opp_score"].notna().any() else None
         opponent = group["opponent"].dropna().iloc[0] if group["opponent"].notna().any() else ""
+        def group_value(column: str, default=""):
+            if column not in group or not group[column].notna().any():
+                return default
+            return group[column].dropna().iloc[0]
+
         rows.append(
             {
-                "match_url": match_url,
+                "match_key": match_key,
+                "match_url": group["match_url"].dropna().iloc[0],
                 "match_id": group["match_id"].dropna().max(),
                 "match_date_sort": group["match_date_sort"].dropna().max()
                 if group["match_date_sort"].notna().any()
                 else pd.NaT,
                 "team": team,
                 "opponent": opponent,
+                "event_name": group_value("event_name"),
+                "event_series": group_value("event_series"),
+                "event_stage": group_value("event_stage"),
+                "event_tier": group_value("event_tier"),
+                "is_lan": group_value("is_lan", False),
+                "patch": group_value("patch"),
+                "match_importance": float(group_value("match_importance", 1.0) or 1.0),
+                "competition_tier": group_value("competition_tier", "unknown"),
+                "competition_strength_weight": float(
+                    group_value("competition_strength_weight", 1.0) or 1.0
+                ),
                 "team_avg_rating": group["rating_for_model"].mean(),
                 "team_win": group["is_winner"].astype(float).max(),
                 "score_margin": float(team_score - opp_score)
@@ -170,7 +374,11 @@ def team_rows_from_cleaned(cleaned: pd.DataFrame) -> pd.DataFrame:
     return chronological_sort(pd.DataFrame(rows))
 
 
-def team_history_features(team_history: pd.DataFrame) -> dict:
+def team_history_features(
+    team_history: pd.DataFrame,
+    reference_date=None,
+    half_life_days: float = 90.0,
+) -> dict:
     if team_history.empty:
         return {
             "recent_rating": 1.0,
@@ -180,20 +388,34 @@ def team_history_features(team_history: pd.DataFrame) -> dict:
             "maps": 0,
         }
 
-    recent = chronological_sort(team_history).tail(10)
+    recent = chronological_sort(team_history).tail(20)
+    reference = pd.to_datetime(reference_date, utc=True, errors="coerce")
+    if pd.isna(reference):
+        reference = recent["match_date_sort"].max()
+    ages = (reference - recent["match_date_sort"]).dt.total_seconds().div(86400.0).clip(lower=0.0)
+    weights = (0.5 ** (ages / half_life_days)).fillna(0.25).to_numpy(dtype=float)
+    def weighted(column: str) -> float:
+        values = recent[column].to_numpy(dtype=float)
+        return float(np.average(values, weights=weights))
+
     consistency = float(recent["team_avg_rating"].std()) if len(recent) > 1 else 0.0
     return {
-        "recent_rating": weighted_recent_mean(recent["team_avg_rating"]),
-        "recent_win_rate": weighted_recent_mean(recent["team_win"]),
-        "score_margin": weighted_recent_mean(recent["score_margin"]),
+        "recent_rating": weighted("team_avg_rating"),
+        "recent_win_rate": weighted("team_win"),
+        "score_margin": weighted("score_margin"),
         "consistency": consistency,
-        "maps": len(team_history),
+        "maps": float(weights.sum()),
     }
 
 
 def h2h_features(team_maps: pd.DataFrame, team_a: str, team_b: str, target: pd.Series) -> dict:
     prior = history_before(team_maps, target)
     h2h = prior[(prior["team"] == team_a) & (prior["opponent"] == team_b)].copy()
+    target_date = pd.to_datetime(target.get("match_date_sort"), utc=True, errors="coerce")
+    if pd.notna(target_date) and not h2h.empty:
+        h2h = h2h[
+            h2h["match_date_sort"] >= target_date - pd.Timedelta(days=180)
+        ].copy()
     if h2h.empty:
         return {"h2h_win_rate": 0.5, "h2h_rating_diff": 0.0, "h2h_maps": 0}
 
@@ -219,65 +441,112 @@ def build_player_training_data(
     if cleaned.empty:
         return pd.DataFrame()
 
-    cleaned["player_norm"] = cleaned["player"].str.lower()
+    player_ids = pd.to_numeric(cleaned.get("player_id"), errors="coerce")
+    cleaned["player_norm"] = cleaned["player"].map(normalize_player_name)
+    cleaned.loc[player_ids.notna(), "player_norm"] = (
+        "id:" + player_ids[player_ids.notna()].astype("int64").astype(str)
+    )
     targets = target_rows_for_season(cleaned, season_year)
+    if targets.empty:
+        return pd.DataFrame()
+
+    team_maps = team_rows_from_cleaned(cleaned)
+    context_cache = {}
+    contexts = targets[
+        ["match_key", "match_date_sort", "match_id", "team", "opponent"]
+    ].drop_duplicates(subset=["match_key", "team", "opponent"])
+    for _, target in contexts.iterrows():
+        prior_team_matches = history_before(team_maps, target)
+        context_cache[(target["match_key"], target["team"], target["opponent"])] = (
+            team_history_features(
+                prior_team_matches[prior_team_matches["team"] == target["team"]],
+                reference_date=target["match_date_sort"],
+            ),
+            team_history_features(
+                prior_team_matches[prior_team_matches["team"] == target["opponent"]],
+                reference_date=target["match_date_sort"],
+            ),
+        )
+
     rows = []
 
-    for _, target in targets.iterrows():
-        prior = history_before(cleaned, target)
-        player_history = prior[prior["player_norm"] == target["player_norm"]]
-        if len(player_history) < min_history_maps:
-            continue
+    for player_norm, player_targets in targets.groupby("player_norm", sort=False):
+        player_rows = cleaned[cleaned["player_norm"] == player_norm]
+        player_feature_cache = {}
+        for _, target in player_targets.iterrows():
+            cache_key = (target["match_key"], target["opponent"])
+            if cache_key not in player_feature_cache:
+                player_history = history_before(player_rows, target)
+                if len(player_history) < 1:
+                    player_feature_cache[cache_key] = None
+                else:
+                    player_stats = rating_stats_from_ordered(player_history, target, recent_days)
+                    player_vs_opp = player_history[player_history["opponent"] == target["opponent"]]
+                    player_feature_cache[cache_key] = (player_stats, player_vs_opp)
 
-        player_stats = rating_stats(player_history, target, recent_days)
-        prior_team_maps = team_rows_from_cleaned(prior) if not prior.empty else pd.DataFrame()
-        team_stats = team_history_features(
-            prior_team_maps[prior_team_maps["team"] == target["team"]]
-            if not prior_team_maps.empty
-            else pd.DataFrame()
-        )
-        opponent_stats = team_history_features(
-            prior_team_maps[prior_team_maps["team"] == target["opponent"]]
-            if not prior_team_maps.empty
-            else pd.DataFrame()
-        )
-        player_vs_opp = player_history[player_history["opponent"] == target["opponent"]]
+            cached_player_features = player_feature_cache[cache_key]
+            if cached_player_features is None:
+                continue
 
-        rows.append(
-            {
-                "target_rating": target["rating_for_model"],
-                "player": target["player"],
-                "team": target["team"],
-                "opponent": target["opponent"],
-                "match_url": target["match_url"],
-                "player_last_3_rating": player_stats["last_3_rating"],
-                "player_last_5_rating": player_stats["last_5_rating"],
-                "player_last_10_rating": player_stats["last_10_rating"],
-                "player_60d_rating": player_stats["recent_days_rating"],
-                "player_overall_rating": player_stats["overall_rating"],
-                "player_rating_trend": player_stats["rating_trend"],
-                "player_recent_acs": player_stats["recent_acs"],
-                "player_recent_kd": player_stats["recent_kd"],
-                "player_recent_assists": player_stats["recent_assists"],
-                "player_maps": player_stats["maps"],
-                "team_recent_rating": team_stats["recent_rating"],
-                "team_recent_win_rate": team_stats["recent_win_rate"],
-                "opponent_recent_rating": opponent_stats["recent_rating"],
-                "opponent_recent_win_rate": opponent_stats["recent_win_rate"],
-                "player_vs_opponent_rating": player_vs_opp["rating_for_model"].mean()
-                if not player_vs_opp.empty
-                else player_stats["overall_rating"],
-                "player_vs_opponent_maps": len(player_vs_opp),
-            }
-        )
+            player_stats, player_vs_opp = cached_player_features
+            team_stats, opponent_stats = context_cache[
+                (target["match_key"], target["team"], target["opponent"])
+            ]
 
-    return pd.DataFrame(rows)
+            rows.append(
+                {
+                    "target_rating": target["rating_for_model"],
+                    "player": target["player"],
+                    "team": target["team"],
+                    "opponent": target["opponent"],
+                    "match_url": target["match_url"],
+                    "match_key": target["match_key"],
+                    "target_date": target["match_date_sort"],
+                    "target_match_id": target["match_id"],
+                    "match_importance": float(target.get("match_importance", 1.0) or 1.0),
+                    "competition_strength_weight": float(
+                        target.get("competition_strength_weight", 1.0) or 1.0
+                    ),
+                    "player_last_3_rating": player_stats["last_3_rating"],
+                    "player_last_5_rating": player_stats["last_5_rating"],
+                    "player_last_10_rating": player_stats["last_10_rating"],
+                    "player_60d_rating": player_stats["recent_days_rating"],
+                    "player_overall_rating": player_stats["overall_rating"],
+                    "player_rating_trend": player_stats["rating_trend"],
+                    "player_recent_acs": player_stats["recent_acs"],
+                    "player_recent_kd": player_stats["recent_kd"],
+                    "player_recent_assists": player_stats["recent_assists"],
+                    "player_maps": player_stats["maps"],
+                    "player_60d_maps": player_stats["recent_days_maps"],
+                    "player_effective_maps": player_stats["effective_maps"],
+                    "player_days_since_last_match": player_stats["days_since_last_match"],
+                    "player_freshness": player_stats["freshness"],
+                    "player_rating_std": player_stats["rating_std"],
+                    "player_agent_pool_size": player_stats["agent_pool_size"],
+                    "team_recent_rating": team_stats["recent_rating"],
+                    "team_recent_win_rate": team_stats["recent_win_rate"],
+                    "opponent_recent_rating": opponent_stats["recent_rating"],
+                    "opponent_recent_win_rate": opponent_stats["recent_win_rate"],
+                    "player_vs_opponent_rating": player_vs_opp["rating_for_model"].mean()
+                    if not player_vs_opp.empty
+                    else player_stats["overall_rating"],
+                    "player_vs_opponent_maps": len(player_vs_opp),
+                }
+            )
+
+    return add_training_weights(pd.DataFrame(rows))
 
 
 def team_feature_row(team_maps: pd.DataFrame, target: pd.Series, team_a: str, team_b: str) -> dict | None:
     prior = history_before(team_maps, target)
-    a_stats = team_history_features(prior[prior["team"] == team_a])
-    b_stats = team_history_features(prior[prior["team"] == team_b])
+    a_stats = team_history_features(
+        prior[prior["team"] == team_a],
+        reference_date=target.get("match_date_sort"),
+    )
+    b_stats = team_history_features(
+        prior[prior["team"] == team_b],
+        reference_date=target.get("match_date_sort"),
+    )
     if a_stats["maps"] == 0 or b_stats["maps"] == 0:
         return None
 
@@ -302,7 +571,7 @@ def build_team_training_data(
     targets = target_rows_for_season(team_maps, season_year)
     rows = []
 
-    for match_url, group in targets.groupby("match_url", sort=False):
+    for match_key, group in targets.groupby("match_key", sort=False):
         if len(group) != 2:
             continue
         first, second = group.iloc[0], group.iloc[1]
@@ -313,91 +582,1067 @@ def build_team_training_data(
             rows.append(
                 {
                     "target_win": int(team_a_row["team_win"]),
-                    "match_url": match_url,
+                    "match_key": match_key,
+                    "match_url": team_a_row["match_url"],
+                    "target_date": team_a_row["match_date_sort"],
+                    "target_match_id": team_a_row["match_id"],
                     "team": team_a_row["team"],
                     "opponent": team_b_row["team"],
+                    "match_importance": float(team_a_row.get("match_importance", 1.0) or 1.0),
+                    "competition_strength_weight": float(
+                        team_a_row.get("competition_strength_weight", 1.0) or 1.0
+                    ),
                     **features,
                 }
             )
 
+    output = pd.DataFrame(rows)
+    if output.empty:
+        return output
+
+    sequential_context, sequential_state = build_sequential_team_context(cleaned, team_maps)
+    if not sequential_context.empty:
+        output = output.merge(
+            sequential_context,
+            on=["match_key", "team", "opponent"],
+            how="left",
+        )
+    for feature in SEQUENTIAL_TEAM_FEATURES:
+        if feature not in output.columns:
+            output[feature] = 0.0
+    if "elo_probability" not in output.columns:
+        output["elo_probability"] = 0.5
+    output.attrs["sequential_state"] = freeze_team_state(sequential_state)
+    weighted = add_training_weights(output)
+    weighted.attrs["sequential_state"] = output.attrs["sequential_state"]
+    return weighted
+
+
+def map_rows_from_cleaned(cleaned: pd.DataFrame) -> pd.DataFrame:
+    if cleaned.empty or "map_id" not in cleaned.columns:
+        return pd.DataFrame()
+    scoped = cleaned[cleaned["map_id"].notna()].copy()
+    rows = []
+    for (match_key, map_id, team), group in scoped.groupby(
+        ["match_key", "map_id", "team"],
+        sort=False,
+    ):
+        team_scores = (
+            pd.to_numeric(group["map_team_score"], errors="coerce").dropna()
+            if "map_team_score" in group.columns
+            else pd.Series(dtype=float)
+        )
+        opponent_scores = (
+            pd.to_numeric(group["map_opp_score"], errors="coerce").dropna()
+            if "map_opp_score" in group.columns
+            else pd.Series(dtype=float)
+        )
+        if team_scores.empty or opponent_scores.empty:
+            continue
+        team_score = float(team_scores.iloc[0])
+        opponent_score = float(opponent_scores.iloc[0])
+        if team_score == opponent_score:
+            continue
+
+        def first_value(column: str, default=""):
+            if column not in group.columns or not group[column].notna().any():
+                return default
+            return group[column].dropna().iloc[0]
+
+        rows.append(
+            {
+                "match_key": match_key,
+                "map_id": map_id,
+                "map_number": float(first_value("map_number", 0) or 0),
+                "map_name": normalize_map_name(first_value("map_name", "")),
+                "team": team,
+                "opponent": first_value("opponent", ""),
+                "target_map_win": float(team_score > opponent_score),
+                "map_pick_team": first_value("map_pick_team", ""),
+                "map_pick_type": str(first_value("map_pick_type", "unknown") or "unknown").lower(),
+            }
+        )
     return pd.DataFrame(rows)
 
 
-def train_player_model(training_df: pd.DataFrame) -> tuple[Pipeline | None, dict]:
+def build_map_training_data(
+    matches: pd.DataFrame,
+    team_training: pd.DataFrame,
+    season_year: int | None,
+) -> pd.DataFrame:
+    cleaned = restrict_history_window(clean_match_data(matches), season_year)
+    map_targets = map_rows_from_cleaned(cleaned)
+    if map_targets.empty or team_training.empty:
+        return pd.DataFrame()
+
+    context_columns = [
+        "match_key",
+        "team",
+        "opponent",
+        "target_date",
+        "target_match_id",
+        "match_importance",
+        "training_weight",
+        "map_probabilities",
+        *TEAM_FEATURES,
+    ]
+    context_columns = [column for column in context_columns if column in team_training.columns]
+    context = team_training[context_columns].drop_duplicates(
+        subset=["match_key", "team", "opponent"],
+        keep="last",
+    )
+    output = map_targets.merge(
+        context,
+        on=["match_key", "team", "opponent"],
+        how="inner",
+    )
+    if output.empty:
+        return output
+
+    def baseline_probability(row) -> float:
+        probabilities = row.get("map_probabilities")
+        if isinstance(probabilities, dict):
+            value = probabilities.get(row.get("map_name"))
+            if value is not None:
+                return float(value)
+        return float(row.get("elo_probability", 0.5) or 0.5)
+
+    output["map_baseline_probability"] = output.apply(baseline_probability, axis=1).clip(0.05, 0.95)
+    pick_team = output["map_pick_team"].fillna("").astype(str)
+    output["map_pick_by_team"] = (pick_team == output["team"].astype(str)).astype(float)
+    output["map_pick_by_opponent"] = (pick_team == output["opponent"].astype(str)).astype(float)
+    output["map_is_decider"] = output["map_pick_type"].eq("decider").astype(float)
+    return output
+
+
+def map_feature_frame(frame: pd.DataFrame, map_names: list[str]) -> pd.DataFrame:
+    output = frame.reindex(columns=[*TEAM_FEATURES, *MAP_CONTEXT_FEATURES], fill_value=0.0).copy()
+    normalized_names = frame.get("map_name", pd.Series("", index=frame.index)).fillna("").astype(str)
+    for map_name in map_names:
+        output[f"map_name::{map_name}"] = (normalized_names == map_name).astype(float)
+    return output.fillna(0.0).astype(float)
+
+
+def grouped_chronological_split(
+    training_df: pd.DataFrame,
+    validation_fraction: float = 0.25,
+) -> tuple[pd.Series, pd.Series]:
+    groups = training_df[
+        ["match_key", "target_date", "target_match_id"]
+    ].drop_duplicates(subset=["match_key"])
+    groups = groups.copy()
+    groups["target_date"] = pd.to_datetime(groups["target_date"], utc=True, errors="coerce")
+    groups = groups.sort_values(["target_date", "target_match_id"], na_position="first")
+    validation_groups = max(1, int(math.ceil(len(groups) * validation_fraction)))
+    split_at = max(1, len(groups) - validation_groups)
+    train_groups = set(groups.iloc[:split_at]["match_key"])
+    validation_groups_set = set(groups.iloc[split_at:]["match_key"])
+    return training_df["match_key"].isin(train_groups), training_df["match_key"].isin(validation_groups_set)
+
+
+def grouped_chronological_three_way_split(
+    training_df: pd.DataFrame,
+    calibration_fraction: float = 0.15,
+    test_fraction: float = 0.20,
+) -> tuple[pd.Series, pd.Series, pd.Series]:
+    groups = training_df[
+        ["match_key", "target_date", "target_match_id"]
+    ].drop_duplicates(subset=["match_key"])
+    groups = groups.copy()
+    groups["target_date"] = pd.to_datetime(groups["target_date"], utc=True, errors="coerce")
+    groups = groups.sort_values(["target_date", "target_match_id"], na_position="first")
+    total_groups = len(groups)
+    test_groups = max(1, int(math.ceil(total_groups * test_fraction)))
+    calibration_groups = max(1, int(math.ceil(total_groups * calibration_fraction)))
+    train_end = max(1, total_groups - test_groups - calibration_groups)
+    calibration_end = max(train_end + 1, total_groups - test_groups)
+
+    train_keys = set(groups.iloc[:train_end]["match_key"])
+    calibration_keys = set(groups.iloc[train_end:calibration_end]["match_key"])
+    test_keys = set(groups.iloc[calibration_end:]["match_key"])
+    return (
+        training_df["match_key"].isin(train_keys),
+        training_df["match_key"].isin(calibration_keys),
+        training_df["match_key"].isin(test_keys),
+    )
+
+
+def rolling_origin_splits(
+    training_df: pd.DataFrame,
+    folds: int = 3,
+    calibration_fraction: float = 0.10,
+    test_fraction: float = 0.15,
+) -> list[tuple[pd.Series, pd.Series, pd.Series]]:
+    groups = training_df[
+        ["match_key", "target_date", "target_match_id"]
+    ].drop_duplicates(subset=["match_key"])
+    groups = groups.copy()
+    groups["target_date"] = pd.to_datetime(groups["target_date"], utc=True, errors="coerce")
+    groups = groups.sort_values(["target_date", "target_match_id"], na_position="first")
+    total = len(groups)
+    test_size = max(1, int(math.floor(total * test_fraction)))
+    calibration_size = max(1, int(math.floor(total * calibration_fraction)))
+    first_test_start = total - folds * test_size
+    splits = []
+    for fold in range(folds):
+        test_start = first_test_start + fold * test_size
+        test_end = min(total, test_start + test_size)
+        calibration_start = test_start - calibration_size
+        if calibration_start < 1 or test_start >= test_end:
+            continue
+        train_keys = set(groups.iloc[:calibration_start]["match_key"])
+        calibration_keys = set(groups.iloc[calibration_start:test_start]["match_key"])
+        test_keys = set(groups.iloc[test_start:test_end]["match_key"])
+        splits.append(
+            (
+                training_df["match_key"].isin(train_keys),
+                training_df["match_key"].isin(calibration_keys),
+                training_df["match_key"].isin(test_keys),
+            )
+        )
+    return splits
+
+
+def _new_player_model(
+    loss: str = "squared_error",
+    quantile: float | None = None,
+) -> HistGradientBoostingRegressor:
+    kwargs = {
+        "loss": loss,
+        "learning_rate": 0.05,
+        "max_iter": 180,
+        "max_leaf_nodes": 24,
+        "min_samples_leaf": 30,
+        "l2_regularization": 1.5,
+        "random_state": 7,
+    }
+    if quantile is not None:
+        kwargs["quantile"] = quantile
+    return HistGradientBoostingRegressor(**kwargs)
+
+
+PLAYER_CANDIDATES = ("hgb_squared", "hgb_absolute", "extra_trees")
+
+
+def _new_player_candidate(name: str):
+    if name == "hgb_absolute":
+        return _new_player_model(loss="absolute_error")
+    if name == "extra_trees":
+        return ExtraTreesRegressor(
+            n_estimators=180,
+            max_depth=18,
+            min_samples_leaf=18,
+            max_features=0.85,
+            n_jobs=1,
+            random_state=17,
+        )
+    return _new_player_model()
+
+
+def train_player_model(
+    training_df: pd.DataFrame,
+    requested_candidate: str = "auto",
+) -> tuple[dict | None, dict]:
     if len(training_df) < 5:
         return None, {"status": "skipped", "reason": "Need at least 5 player training rows."}
 
     x = training_df[PLAYER_FEATURES].fillna(0.0)
-    y = training_df["target_rating"]
-    model = Pipeline([("scale", StandardScaler()), ("ridge", Ridge(alpha=1.0))])
+    y = training_df["target_rating"].astype(float)
+    baseline = training_df["player_last_10_rating"].astype(float).clip(0.35, 1.90)
+    residual_target = y - baseline
+    weights = training_df.get("training_weight", pd.Series(1.0, index=training_df.index)).astype(float)
+    lower_model = _new_player_model(loss="quantile", quantile=0.10)
+    upper_model = _new_player_model(loss="quantile", quantile=0.90)
+    interval_adjustment = 0.0
+    selected_candidate = "hgb_squared"
+    recommended_candidate = selected_candidate
+    selection_mode = "auto"
+    correction_weight = 0.0
 
-    if len(training_df) >= 25:
-        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.25, random_state=7)
-        model.fit(x_train, y_train)
-        preds = model.predict(x_test)
+    if len(training_df) >= 25 and training_df["match_key"].nunique() >= 8:
+        train_mask, calibration_mask, test_mask = grouped_chronological_three_way_split(training_df)
+        candidate_scores = {}
+        candidate_models = {}
+        calibration_baseline = baseline[calibration_mask].to_numpy(dtype=float)
+        calibration_y = y[calibration_mask].to_numpy(dtype=float)
+        for candidate_name in PLAYER_CANDIDATES:
+            candidate_model = _new_player_candidate(candidate_name)
+            candidate_model.fit(
+                x[train_mask],
+                residual_target[train_mask],
+                sample_weight=weights[train_mask],
+            )
+            residual_predictions = candidate_model.predict(x[calibration_mask])
+            best_weight = 0.0
+            best_mae = float(mean_absolute_error(calibration_y, calibration_baseline))
+            for blend_weight in np.linspace(0.0, 1.0, 21):
+                blended = np.clip(
+                    calibration_baseline + blend_weight * residual_predictions,
+                    0.35,
+                    1.90,
+                )
+                blend_mae = float(mean_absolute_error(calibration_y, blended))
+                if blend_mae < best_mae:
+                    best_mae = blend_mae
+                    best_weight = float(blend_weight)
+            candidate_scores[candidate_name] = {
+                "mae": best_mae,
+                "correction_weight": best_weight,
+            }
+            candidate_models[candidate_name] = candidate_model
+
+        recommended_candidate = min(
+            candidate_scores,
+            key=lambda name: candidate_scores[name]["mae"],
+        )
+        selected_candidate, selection_mode = resolve_selected_candidate(
+            "player",
+            requested_candidate,
+            recommended_candidate,
+        )
+        if selected_candidate == "last_10_baseline":
+            correction_weight = 0.0
+            evaluation_model = candidate_models[recommended_candidate]
+        else:
+            correction_weight = candidate_scores[selected_candidate]["correction_weight"]
+            evaluation_model = candidate_models[selected_candidate]
+        evaluation_lower = _new_player_model(loss="quantile", quantile=0.10)
+        evaluation_upper = _new_player_model(loss="quantile", quantile=0.90)
+        evaluation_lower.fit(
+            x[train_mask],
+            residual_target[train_mask],
+            sample_weight=weights[train_mask],
+        )
+        evaluation_upper.fit(
+            x[train_mask],
+            residual_target[train_mask],
+            sample_weight=weights[train_mask],
+        )
+
+        calibration_low_raw = calibration_baseline + evaluation_lower.predict(x[calibration_mask])
+        calibration_high_raw = calibration_baseline + evaluation_upper.predict(x[calibration_mask])
+        calibration_low = np.minimum(calibration_low_raw, calibration_high_raw)
+        calibration_high = np.maximum(calibration_low_raw, calibration_high_raw)
+        nonconformity = np.maximum.reduce(
+            [
+                calibration_low - calibration_y,
+                calibration_y - calibration_high,
+                np.zeros(len(calibration_y)),
+            ]
+        )
+        interval_adjustment = float(np.quantile(nonconformity, 0.80, method="higher"))
+
+        baseline_preds = baseline[test_mask]
+        preds = (
+            baseline_preds
+            if selected_candidate == "last_10_baseline"
+            else (
+                baseline_preds
+                + correction_weight * evaluation_model.predict(x[test_mask])
+            ).clip(0.35, 1.90)
+        )
+        y_test = y[test_mask]
+        test_low_raw = baseline_preds.to_numpy(dtype=float) + evaluation_lower.predict(x[test_mask])
+        test_high_raw = baseline_preds.to_numpy(dtype=float) + evaluation_upper.predict(x[test_mask])
+        test_low = np.minimum(test_low_raw, test_high_raw) - interval_adjustment
+        test_high = np.maximum(test_low_raw, test_high_raw) + interval_adjustment
+        mae = float(mean_absolute_error(y_test, preds))
+        baseline_mae = float(mean_absolute_error(y_test, baseline_preds))
+        model_reliability = max(0.0, min(1.0, (baseline_mae - mae) / baseline_mae)) if baseline_mae else 0.0
         metrics = {
             "status": "trained",
             "rows": len(training_df),
-            "validation_rows": len(x_test),
-            "mae": mean_absolute_error(y_test, preds),
-            "r2": r2_score(y_test, preds),
+            "training_rows": int(train_mask.sum()),
+            "calibration_rows": int(calibration_mask.sum()),
+            "test_rows": int(test_mask.sum()),
+            "test_matches": int(training_df.loc[test_mask, "match_key"].nunique()),
+            "split_strategy": "chronological_match_grouped_train_calibration_test",
+            "mae": mae,
+            "r2": float(r2_score(y_test, preds)),
+            "baseline": "last_10_rating",
+            "baseline_mae": baseline_mae,
+            "selected_candidate": selected_candidate,
+            "recommended_candidate": recommended_candidate,
+            "selection_mode": selection_mode,
+            "candidate_calibration": candidate_scores,
+            "correction_weight": correction_weight,
+            "skill_vs_baseline": model_reliability,
+            "model_reliability": model_reliability,
+            "residual_std": float(np.std(y_test.to_numpy(dtype=float) - preds)),
+            "interval_nominal_coverage": 0.80,
+            "interval_test_coverage": float(np.mean((y_test >= test_low) & (y_test <= test_high))),
+            "interval_mean_width": float(np.mean(test_high - test_low)),
+            "interval_adjustment": interval_adjustment,
+            "test_start": str(training_df.loc[test_mask, "target_date"].min()),
         }
+        rolling_maes = []
+        rolling_skills = []
+        for rolling_train, rolling_calibration, rolling_test in rolling_origin_splits(
+            training_df
+        ):
+            development = rolling_train | rolling_calibration
+            rolling_baseline = baseline[rolling_test]
+            if selected_candidate == "last_10_baseline":
+                rolling_predictions = rolling_baseline
+            else:
+                rolling_model = _new_player_candidate(selected_candidate)
+                rolling_model.fit(
+                    x[development],
+                    residual_target[development],
+                    sample_weight=weights[development],
+                )
+                rolling_predictions = (
+                    rolling_baseline
+                    + correction_weight * rolling_model.predict(x[rolling_test])
+                ).clip(0.35, 1.90)
+            rolling_y = y[rolling_test]
+            rolling_mae = float(mean_absolute_error(rolling_y, rolling_predictions))
+            rolling_baseline_mae = float(mean_absolute_error(rolling_y, rolling_baseline))
+            rolling_maes.append(rolling_mae)
+            rolling_skills.append(
+                1.0 - rolling_mae / rolling_baseline_mae
+                if rolling_baseline_mae
+                else 0.0
+            )
+        metrics["rolling_backtest_folds"] = len(rolling_maes)
+        metrics["rolling_mae_mean"] = float(np.mean(rolling_maes)) if rolling_maes else None
+        metrics["rolling_mae_std"] = float(np.std(rolling_maes)) if rolling_maes else None
+        metrics["rolling_skill_vs_baseline_mean"] = (
+            float(np.mean(rolling_skills)) if rolling_skills else None
+        )
     else:
-        model.fit(x, y)
-        preds = model.predict(x)
+        preds = y.mean() + np.zeros(len(y))
         metrics = {
             "status": "trained",
             "rows": len(training_df),
             "validation_rows": 0,
-            "train_mae": mean_absolute_error(y, preds),
-            "train_r2": r2_score(y, preds) if len(training_df) > 1 else 0.0,
+            "split_strategy": "insufficient_matches_for_holdout",
+            "train_mae": float(mean_absolute_error(y, preds)),
+            "train_r2": 0.0,
+            "model_reliability": 0.0,
+            "selected_candidate": selected_candidate,
+            "recommended_candidate": recommended_candidate,
+            "selection_mode": selection_mode,
+            "correction_weight": correction_weight,
+            "residual_std": float(np.std(y.to_numpy(dtype=float) - preds)),
         }
 
-    return model, metrics
+    metrics["evaluated_correction_weight"] = correction_weight
+    if (
+        selection_mode == "auto"
+        and float(metrics.get("model_reliability", 0.0)) <= 0.0
+    ):
+        correction_weight = 0.0
+    metrics["correction_weight"] = correction_weight
+
+    fit_candidate = (
+        recommended_candidate
+        if selected_candidate == "last_10_baseline"
+        else selected_candidate
+    )
+    point_model = _new_player_candidate(fit_candidate)
+    point_model.fit(x, residual_target, sample_weight=weights)
+    lower_model.fit(x, residual_target, sample_weight=weights)
+    upper_model.fit(x, residual_target, sample_weight=weights)
+    return {
+        "point": point_model,
+        "lower": lower_model,
+        "upper": upper_model,
+        "interval_adjustment": interval_adjustment,
+        "selected_candidate": selected_candidate,
+        "recommended_candidate": recommended_candidate,
+        "selection_mode": selection_mode,
+        "correction_weight": correction_weight,
+    }, metrics
 
 
-def train_team_model(training_df: pd.DataFrame) -> tuple[Pipeline | None, dict]:
-    if len(training_df) < 6:
-        return None, {"status": "skipped", "reason": "Need at least 6 team training rows."}
-    if training_df["target_win"].nunique() < 2:
-        return None, {"status": "skipped", "reason": "Need both wins and losses in team training rows."}
-
-    x = training_df[TEAM_FEATURES].fillna(0.0)
-    y = training_df["target_win"]
-    model = Pipeline(
-        [
-            ("scale", StandardScaler()),
-            ("logistic", LogisticRegression(max_iter=1000, C=1.0)),
-        ]
+def _new_team_model() -> HistGradientBoostingRegressor:
+    return HistGradientBoostingRegressor(
+        learning_rate=0.045,
+        max_iter=180,
+        max_leaf_nodes=20,
+        min_samples_leaf=24,
+        l2_regularization=2.0,
+        random_state=7,
     )
 
-    if len(training_df) >= 30 and y.value_counts().min() >= 4:
-        x_train, x_test, y_train, y_test = train_test_split(
-            x, y, test_size=0.25, random_state=7, stratify=y
+
+PROBABILITY_CANDIDATES = (
+    "hgb_residual",
+    "hgb_classifier",
+    "logistic_classifier",
+)
+
+PROBABILITY_BLEND_WEIGHTS = tuple(np.linspace(0.0, 1.0, 21))
+PROBABILITY_TEMPERATURES = (0.65, 0.75, 0.85, 1.0, 1.15, 1.3, 1.5, 1.75, 2.0, 2.5, 3.0)
+PROBABILITY_MAX_MODEL_DELTA = 0.20
+
+
+def _new_probability_candidate(name: str, min_samples_leaf: int = 24):
+    if name == "hgb_classifier":
+        return HistGradientBoostingClassifier(
+            learning_rate=0.045,
+            max_iter=180,
+            max_leaf_nodes=20,
+            min_samples_leaf=min_samples_leaf,
+            l2_regularization=2.0,
+            random_state=7,
+        ), "classifier"
+    if name == "logistic_classifier":
+        return make_pipeline(
+            StandardScaler(),
+            LogisticRegression(C=0.25, max_iter=1200, random_state=7),
+        ), "classifier"
+    return HistGradientBoostingRegressor(
+        learning_rate=0.045,
+        max_iter=180,
+        max_leaf_nodes=20,
+        min_samples_leaf=min_samples_leaf,
+        l2_regularization=2.0,
+        random_state=7,
+    ), "residual"
+
+
+def _fit_probability_candidate(
+    model,
+    kind: str,
+    x: pd.DataFrame,
+    y: pd.Series,
+    baseline: pd.Series,
+    weights: pd.Series,
+) -> None:
+    target = y - baseline if kind == "residual" else y
+    if hasattr(model, "steps"):
+        final_step = model.steps[-1][0]
+        model.fit(x, target, **{f"{final_step}__sample_weight": weights})
+    else:
+        model.fit(x, target, sample_weight=weights)
+
+
+def _predict_probability_candidate(
+    model,
+    kind: str,
+    x: pd.DataFrame,
+    baseline,
+) -> np.ndarray:
+    baseline_values = np.asarray(baseline, dtype=float)
+    if kind == "residual":
+        return np.clip(baseline_values + model.predict(x), 0.03, 0.97)
+    return np.clip(model.predict_proba(x)[:, 1], 0.03, 0.97)
+
+
+def apply_probability_blend_temperature(
+    model_probabilities,
+    baseline_probabilities,
+    blend_weight: float = 1.0,
+    temperature: float = 1.0,
+    max_model_delta: float = PROBABILITY_MAX_MODEL_DELTA,
+) -> np.ndarray:
+    model_values = np.asarray(model_probabilities, dtype=float)
+    baseline_values = np.asarray(baseline_probabilities, dtype=float)
+    model_values = np.clip(
+        model_values,
+        baseline_values - float(max_model_delta),
+        baseline_values + float(max_model_delta),
+    )
+    blended = baseline_values + float(blend_weight) * (
+        model_values - baseline_values
+    )
+    clipped = np.clip(blended, 0.02, 0.98)
+    logits = np.log(clipped / (1.0 - clipped)) / max(0.05, float(temperature))
+    return np.clip(1.0 / (1.0 + np.exp(-logits)), 0.02, 0.98)
+
+
+def optimize_probability_blend_temperature(
+    model_probabilities,
+    baseline_probabilities,
+    targets,
+) -> dict:
+    targets = np.asarray(targets, dtype=float)
+    best = None
+    for blend_weight in PROBABILITY_BLEND_WEIGHTS:
+        for temperature in PROBABILITY_TEMPERATURES:
+            probabilities = apply_probability_blend_temperature(
+                model_probabilities,
+                baseline_probabilities,
+                blend_weight=blend_weight,
+                temperature=temperature,
+            )
+            score = float(log_loss(targets, probabilities, labels=[0, 1]))
+            if best is None or score < best["log_loss"]:
+                best = {
+                    "log_loss": score,
+                    "brier_score": float(brier_score_loss(targets, probabilities)),
+                    "accuracy": float(accuracy_score(targets, probabilities >= 0.5)),
+                    "model_blend_weight": float(blend_weight),
+                    "probability_temperature": float(temperature),
+                    "max_model_delta": PROBABILITY_MAX_MODEL_DELTA,
+                }
+    return best
+
+
+def _select_probability_candidate(
+    x: pd.DataFrame,
+    y: pd.Series,
+    baseline: pd.Series,
+    weights: pd.Series,
+    train_mask: pd.Series,
+    calibration_mask: pd.Series,
+    min_samples_leaf: int = 24,
+) -> tuple[str, str, object, dict]:
+    scores = {}
+    models = {}
+    kinds = {}
+    for candidate_name in PROBABILITY_CANDIDATES:
+        model, kind = _new_probability_candidate(candidate_name, min_samples_leaf)
+        _fit_probability_candidate(
+            model,
+            kind,
+            x[train_mask],
+            y[train_mask],
+            baseline[train_mask],
+            weights[train_mask],
         )
-        model.fit(x_train, y_train)
-        preds = model.predict(x_test)
-        probs = model.predict_proba(x_test)[:, 1]
+        probabilities = _predict_probability_candidate(
+            model,
+            kind,
+            x[calibration_mask],
+            baseline[calibration_mask],
+        )
+        calibration_y = y[calibration_mask]
+        raw_log_loss = float(log_loss(calibration_y, probabilities, labels=[0, 1]))
+        scores[candidate_name] = optimize_probability_blend_temperature(
+            probabilities,
+            baseline[calibration_mask],
+            calibration_y,
+        )
+        scores[candidate_name]["raw_log_loss"] = raw_log_loss
+        models[candidate_name] = model
+        kinds[candidate_name] = kind
+    selected = min(scores, key=lambda name: scores[name]["log_loss"])
+    return selected, kinds[selected], models[selected], scores
+
+
+def apply_symmetric_calibration(
+    calibrator: IsotonicRegression | None,
+    probabilities,
+) -> np.ndarray:
+    raw = np.asarray(probabilities, dtype=float)
+    if calibrator is None:
+        return raw
+    forward = calibrator.predict(raw)
+    reverse = 1.0 - calibrator.predict(1.0 - raw)
+    return np.clip(0.5 * (forward + reverse), 0.02, 0.98)
+
+
+def train_team_model(
+    training_df: pd.DataFrame,
+    requested_candidate: str = "auto",
+) -> tuple[object | None, IsotonicRegression | None, dict]:
+    if len(training_df) < 6:
+        return None, None, {"status": "skipped", "reason": "Need at least 6 team training rows."}
+    if training_df["target_win"].nunique() < 2:
+        return None, None, {"status": "skipped", "reason": "Need both wins and losses in team training rows."}
+
+    x = training_df[TEAM_FEATURES].fillna(0.0)
+    y = training_df["target_win"].astype(float)
+    baseline = training_df["elo_probability"].fillna(0.5).astype(float).clip(0.05, 0.95)
+    weights = training_df.get("training_weight", pd.Series(1.0, index=training_df.index)).astype(float)
+    calibrator = None
+    selected_candidate = "hgb_residual"
+    recommended_candidate = selected_candidate
+    selection_mode = "auto"
+    model_kind = "residual"
+    candidate_scores = {}
+    model_blend_weight = 0.0
+    probability_temperature = 1.0
+    max_model_delta = PROBABILITY_MAX_MODEL_DELTA
+
+    if len(training_df) >= 30 and y.value_counts().min() >= 4 and training_df["match_key"].nunique() >= 12:
+        train_mask, calibration_mask, test_mask = grouped_chronological_three_way_split(training_df)
+        recommended_candidate, recommended_kind, recommended_model, candidate_scores = (
+            _select_probability_candidate(
+                x,
+                y,
+                baseline,
+                weights,
+                train_mask,
+                calibration_mask,
+            )
+        )
+        selected_candidate, selection_mode = resolve_selected_candidate(
+            "team",
+            requested_candidate,
+            recommended_candidate,
+        )
+        if selected_candidate == "elo_baseline":
+            evaluation_model = None
+            model_kind = "baseline"
+            calibration_probs = baseline[calibration_mask].to_numpy(dtype=float)
+        elif selected_candidate == recommended_candidate:
+            evaluation_model = recommended_model
+            model_kind = recommended_kind
+            calibration_probs = _predict_probability_candidate(
+                evaluation_model,
+                model_kind,
+                x[calibration_mask],
+                baseline[calibration_mask],
+            )
+        else:
+            evaluation_model, model_kind = _new_probability_candidate(selected_candidate)
+            _fit_probability_candidate(
+                evaluation_model,
+                model_kind,
+                x[train_mask],
+                y[train_mask],
+                baseline[train_mask],
+                weights[train_mask],
+            )
+            calibration_probs = _predict_probability_candidate(
+                evaluation_model,
+                model_kind,
+                x[calibration_mask],
+                baseline[calibration_mask],
+            )
+        if model_kind == "baseline":
+            calibration_method = "none"
+        else:
+            calibration_settings = candidate_scores[selected_candidate]
+            model_blend_weight = float(
+                calibration_settings["model_blend_weight"]
+            )
+            probability_temperature = float(
+                calibration_settings["probability_temperature"]
+            )
+            max_model_delta = float(calibration_settings["max_model_delta"])
+            calibration_method = "baseline_blend_temperature"
+
+        raw_test_probs = (
+            baseline[test_mask].to_numpy(dtype=float)
+            if model_kind == "baseline"
+            else _predict_probability_candidate(
+                evaluation_model,
+                model_kind,
+                x[test_mask],
+                baseline[test_mask],
+            )
+        )
+        y_test = y[test_mask]
+        baseline_probs = baseline[test_mask].to_numpy(dtype=float)
+        probs = (
+            raw_test_probs
+            if model_kind == "baseline"
+            else apply_probability_blend_temperature(
+                raw_test_probs,
+                baseline_probs,
+                blend_weight=model_blend_weight,
+                temperature=probability_temperature,
+                max_model_delta=max_model_delta,
+            )
+        )
+        coin_probs = np.full(len(y_test), 0.5)
+        model_log_loss = float(log_loss(y_test, probs, labels=[0, 1]))
+        coin_log_loss = float(log_loss(y_test, coin_probs, labels=[0, 1]))
+        baseline_log_loss = float(log_loss(y_test, baseline_probs, labels=[0, 1]))
+        model_brier = float(brier_score_loss(y_test, probs))
+        baseline_brier = float(brier_score_loss(y_test, baseline_probs))
+        accuracy = float(accuracy_score(y_test, probs >= 0.5))
+        baseline_accuracy = float(accuracy_score(y_test, baseline_probs >= 0.5))
+        reference_log_loss = min(coin_log_loss, baseline_log_loss)
+        reference_brier = min(0.25, baseline_brier)
+        reference_accuracy = max(0.5, baseline_accuracy)
+        log_skill = max(0.0, 1.0 - model_log_loss / reference_log_loss)
+        brier_skill = max(0.0, 1.0 - model_brier / reference_brier)
+        accuracy_skill = max(
+            0.0,
+            (accuracy - reference_accuracy) / max(0.01, 1.0 - reference_accuracy),
+        )
+        model_reliability = min(1.0, (log_skill + brier_skill + accuracy_skill) / 3.0)
+        enabled = (
+            model_kind == "baseline"
+            or (model_log_loss < reference_log_loss and model_brier < reference_brier)
+        )
+        active_for_predictions = enabled or selection_mode == "manual"
+        if not enabled and selection_mode == "auto":
+            model_reliability = 0.0
         metrics = {
             "status": "trained",
             "rows": len(training_df),
-            "validation_rows": len(x_test),
-            "accuracy": accuracy_score(y_test, preds),
-            "log_loss": log_loss(y_test, probs),
+            "training_rows": int(train_mask.sum()),
+            "calibration_rows": int(calibration_mask.sum()),
+            "test_rows": int(test_mask.sum()),
+            "test_matches": int(training_df.loc[test_mask, "match_key"].nunique()),
+            "split_strategy": "chronological_match_grouped_train_calibration_test",
+            "model_target": "series_win_probability",
+            "enabled": enabled,
+            "active_for_predictions": active_for_predictions,
+            "selected_candidate": selected_candidate,
+            "recommended_candidate": recommended_candidate,
+            "selection_mode": selection_mode,
+            "model_kind": model_kind,
+            "candidate_calibration": candidate_scores,
+            "accuracy": accuracy,
+            "log_loss": model_log_loss,
+            "brier_score": model_brier,
+            "calibration": calibration_method,
+            "model_blend_weight": model_blend_weight,
+            "probability_temperature": probability_temperature,
+            "max_model_delta": max_model_delta,
+            "coinflip_accuracy": 0.5,
+            "coinflip_log_loss": coin_log_loss,
+            "elo_accuracy": baseline_accuracy,
+            "elo_log_loss": baseline_log_loss,
+            "elo_brier_score": baseline_brier,
+            "reliability_baseline": "best_of_elo_or_coinflip",
+            "model_reliability": model_reliability,
+            "test_start": str(training_df.loc[test_mask, "target_date"].min()),
         }
+
+        rolling_accuracies = []
+        rolling_log_losses = []
+        rolling_baseline_accuracies = []
+        for rolling_train, rolling_calibration, rolling_test in rolling_origin_splits(training_df):
+            rolling_calibration_y = y[rolling_calibration]
+            if selected_candidate == "elo_baseline":
+                rolling_probs = baseline[rolling_test].to_numpy(dtype=float)
+            else:
+                rolling_model, rolling_kind = _new_probability_candidate(selected_candidate)
+                _fit_probability_candidate(
+                    rolling_model,
+                    rolling_kind,
+                    x[rolling_train],
+                    y[rolling_train],
+                    baseline[rolling_train],
+                    weights[rolling_train],
+                )
+                rolling_calibration_probs = _predict_probability_candidate(
+                    rolling_model,
+                    rolling_kind,
+                    x[rolling_calibration],
+                    baseline[rolling_calibration],
+                )
+                rolling_settings = optimize_probability_blend_temperature(
+                    rolling_calibration_probs,
+                    baseline[rolling_calibration],
+                    rolling_calibration_y,
+                )
+                rolling_raw = _predict_probability_candidate(
+                    rolling_model,
+                    rolling_kind,
+                    x[rolling_test],
+                    baseline[rolling_test],
+                )
+                rolling_probs = apply_probability_blend_temperature(
+                    rolling_raw,
+                    baseline[rolling_test],
+                    blend_weight=rolling_settings["model_blend_weight"],
+                    temperature=rolling_settings["probability_temperature"],
+                    max_model_delta=rolling_settings["max_model_delta"],
+                )
+            rolling_y = y[rolling_test]
+            rolling_baseline = baseline[rolling_test].to_numpy(dtype=float)
+            rolling_accuracies.append(float(accuracy_score(rolling_y, rolling_probs >= 0.5)))
+            rolling_baseline_accuracies.append(
+                float(accuracy_score(rolling_y, rolling_baseline >= 0.5))
+            )
+            rolling_log_losses.append(float(log_loss(rolling_y, rolling_probs, labels=[0, 1])))
+        metrics["rolling_backtest_folds"] = len(rolling_accuracies)
+        metrics["rolling_accuracy_mean"] = float(np.mean(rolling_accuracies)) if rolling_accuracies else None
+        metrics["rolling_accuracy_std"] = float(np.std(rolling_accuracies)) if rolling_accuracies else None
+        metrics["rolling_elo_accuracy_mean"] = (
+            float(np.mean(rolling_baseline_accuracies)) if rolling_baseline_accuracies else None
+        )
+        metrics["rolling_log_loss_mean"] = float(np.mean(rolling_log_losses)) if rolling_log_losses else None
     else:
-        model.fit(x, y)
-        preds = model.predict(x)
-        probs = model.predict_proba(x)[:, 1]
         metrics = {
             "status": "trained",
             "rows": len(training_df),
             "validation_rows": 0,
-            "train_accuracy": accuracy_score(y, preds),
-            "train_log_loss": log_loss(y, probs),
+            "split_strategy": "insufficient_matches_for_holdout",
+            "selected_candidate": selected_candidate,
+            "recommended_candidate": recommended_candidate,
+            "selection_mode": selection_mode,
+            "model_kind": model_kind,
+            "model_reliability": 0.0,
+            "model_blend_weight": model_blend_weight,
+            "probability_temperature": probability_temperature,
+            "max_model_delta": max_model_delta,
         }
 
-    return model, metrics
+    fit_candidate = (
+        recommended_candidate if selected_candidate == "elo_baseline" else selected_candidate
+    )
+    model, fitted_kind = _new_probability_candidate(fit_candidate)
+    _fit_probability_candidate(model, fitted_kind, x, y, baseline, weights)
+    metrics["model_kind"] = "baseline" if selected_candidate == "elo_baseline" else fitted_kind
+    return model, calibrator, metrics
+
+
+def train_map_model(
+    training_df: pd.DataFrame,
+    requested_candidate: str = "auto",
+) -> tuple[dict | None, dict]:
+    if len(training_df) < 20 or training_df.get("target_map_win", pd.Series(dtype=float)).nunique() < 2:
+        return None, {"status": "skipped", "reason": "Need scored maps with both wins and losses."}
+
+    map_names = sorted(training_df["map_name"].dropna().astype(str).unique())
+    x = map_feature_frame(training_df, map_names)
+    y = training_df["target_map_win"].astype(float)
+    baseline = training_df["map_baseline_probability"].fillna(0.5).astype(float).clip(0.05, 0.95)
+    weights = training_df.get("training_weight", pd.Series(1.0, index=training_df.index)).astype(float)
+    train_mask, calibration_mask, test_mask = grouped_chronological_three_way_split(training_df)
+    recommended_candidate, recommended_kind, recommended_model, candidate_scores = _select_probability_candidate(
+        x,
+        y,
+        baseline,
+        weights,
+        train_mask,
+        calibration_mask,
+        min_samples_leaf=20,
+    )
+    selected_candidate, selection_mode = resolve_selected_candidate(
+        "map",
+        requested_candidate,
+        recommended_candidate,
+    )
+    model_blend_weight = 0.0
+    probability_temperature = 1.0
+    max_model_delta = PROBABILITY_MAX_MODEL_DELTA
+    if selected_candidate == "map_form_baseline":
+        evaluation_model = None
+        model_kind = "baseline"
+        calibration_probs = baseline[calibration_mask].to_numpy(dtype=float)
+    elif selected_candidate == recommended_candidate:
+        evaluation_model = recommended_model
+        model_kind = recommended_kind
+        calibration_probs = _predict_probability_candidate(
+            evaluation_model,
+            model_kind,
+            x[calibration_mask],
+            baseline[calibration_mask],
+        )
+    else:
+        evaluation_model, model_kind = _new_probability_candidate(
+            selected_candidate,
+            min_samples_leaf=20,
+        )
+        _fit_probability_candidate(
+            evaluation_model,
+            model_kind,
+            x[train_mask],
+            y[train_mask],
+            baseline[train_mask],
+            weights[train_mask],
+        )
+        calibration_probs = _predict_probability_candidate(
+            evaluation_model,
+            model_kind,
+            x[calibration_mask],
+            baseline[calibration_mask],
+        )
+    calibrator = None
+    if model_kind == "baseline":
+        calibration_method = "none"
+    else:
+        calibration_settings = candidate_scores[selected_candidate]
+        model_blend_weight = float(calibration_settings["model_blend_weight"])
+        probability_temperature = float(
+            calibration_settings["probability_temperature"]
+        )
+        max_model_delta = float(calibration_settings["max_model_delta"])
+        calibration_method = "baseline_blend_temperature"
+
+    raw_test = (
+        baseline[test_mask].to_numpy(dtype=float)
+        if model_kind == "baseline"
+        else _predict_probability_candidate(
+            evaluation_model,
+            model_kind,
+            x[test_mask],
+            baseline[test_mask],
+        )
+    )
+    y_test = y[test_mask]
+    baseline_test = baseline[test_mask].to_numpy(dtype=float)
+    probabilities = (
+        raw_test
+        if model_kind == "baseline"
+        else apply_probability_blend_temperature(
+            raw_test,
+            baseline_test,
+            blend_weight=model_blend_weight,
+            temperature=probability_temperature,
+            max_model_delta=max_model_delta,
+        )
+    )
+    model_log_loss = float(log_loss(y_test, probabilities, labels=[0, 1]))
+    baseline_log_loss = float(log_loss(y_test, baseline_test, labels=[0, 1]))
+    model_brier = float(brier_score_loss(y_test, probabilities))
+    baseline_brier = float(brier_score_loss(y_test, baseline_test))
+    accuracy = float(accuracy_score(y_test, probabilities >= 0.5))
+    baseline_accuracy = float(accuracy_score(y_test, baseline_test >= 0.5))
+    log_skill = max(0.0, 1.0 - model_log_loss / baseline_log_loss) if baseline_log_loss else 0.0
+    brier_skill = max(0.0, 1.0 - model_brier / baseline_brier) if baseline_brier else 0.0
+    accuracy_skill = max(
+        0.0,
+        (accuracy - baseline_accuracy) / max(0.01, 1.0 - baseline_accuracy),
+    )
+    model_reliability = min(1.0, (log_skill + brier_skill + accuracy_skill) / 3.0)
+    enabled = (
+        model_kind == "baseline"
+        or (model_log_loss < baseline_log_loss and model_brier < baseline_brier)
+    )
+    active_for_predictions = enabled or selection_mode == "manual"
+    if not enabled and selection_mode == "auto":
+        model_reliability = 0.0
+    metrics = {
+        "status": "trained",
+        "rows": len(training_df),
+        "maps": int(training_df[["match_key", "map_id"]].drop_duplicates().shape[0]),
+        "training_rows": int(train_mask.sum()),
+        "calibration_rows": int(calibration_mask.sum()),
+        "test_rows": int(test_mask.sum()),
+        "test_matches": int(training_df.loc[test_mask, "match_key"].nunique()),
+        "split_strategy": "chronological_match_grouped_train_calibration_test",
+        "selected_candidate": selected_candidate,
+        "recommended_candidate": recommended_candidate,
+        "selection_mode": selection_mode,
+        "model_kind": model_kind,
+        "candidate_calibration": candidate_scores,
+        "accuracy": accuracy,
+        "log_loss": model_log_loss,
+        "brier_score": model_brier,
+        "baseline_accuracy": baseline_accuracy,
+        "baseline_log_loss": baseline_log_loss,
+        "baseline_brier_score": baseline_brier,
+        "model_reliability": model_reliability,
+        "enabled": enabled,
+        "active_for_predictions": active_for_predictions,
+        "calibration": calibration_method,
+        "model_blend_weight": model_blend_weight,
+        "probability_temperature": probability_temperature,
+        "max_model_delta": max_model_delta,
+        "test_start": str(training_df.loc[test_mask, "target_date"].min()),
+        "map_names": map_names,
+    }
+
+    fit_candidate = (
+        recommended_candidate
+        if selected_candidate == "map_form_baseline"
+        else selected_candidate
+    )
+    final_model, final_kind = _new_probability_candidate(fit_candidate, min_samples_leaf=20)
+    _fit_probability_candidate(final_model, final_kind, x, y, baseline, weights)
+    return {
+        "model": final_model,
+        "model_kind": "baseline" if selected_candidate == "map_form_baseline" else final_kind,
+        "calibrator": calibrator,
+        "model_blend_weight": model_blend_weight,
+        "probability_temperature": probability_temperature,
+        "max_model_delta": max_model_delta,
+        "map_names": map_names,
+        "features": list(x.columns),
+    }, metrics
 
 
 def save_model(path: str, payload: dict) -> None:
@@ -406,16 +1651,118 @@ def save_model(path: str, payload: dict) -> None:
         pickle.dump(payload, handle)
 
 
+def dataset_fingerprint(matches: pd.DataFrame) -> str:
+    columns = [
+        column
+        for column in [
+            "match_id",
+            "map_id",
+            "event_id",
+            "season_year",
+            "team",
+            "opponent",
+            "player",
+            "player_id",
+            "vlr_rating",
+            "acs",
+            "kills",
+            "deaths",
+            "assists",
+            "event_name",
+            "event_stage",
+            "event_tier",
+            "is_lan",
+            "patch",
+            "map_veto",
+            "map_pick_team",
+            "map_pick_type",
+            "map_veto_order",
+            "match_importance",
+            "competition_tier",
+            "competition_strength_weight",
+            "team_tier_at_match",
+            "opponent_tier_at_match",
+            "team_promoted_next_season",
+            "opponent_promoted_next_season",
+        ]
+        if column in matches.columns
+    ]
+    if not columns:
+        return hashlib.sha256(b"empty").hexdigest()
+    stable = matches[columns].copy().fillna("").astype(str).sort_values(columns).reset_index(drop=True)
+    hashed = pd.util.hash_pandas_object(stable, index=False).to_numpy()
+    return hashlib.sha256(hashed.tobytes()).hexdigest()
+
+
+def coverage_summary(matches: pd.DataFrame, min_team_matches: int, season_year: int | None) -> dict:
+    coverage = match_coverage_report(
+        matches,
+        registry_team_pages(include_missing=True),
+        min_matches_per_team=min_team_matches,
+        season_year=season_year,
+    )
+    if coverage.empty:
+        return {
+            "target_matches_per_team": min_team_matches,
+            "teams_at_target": 0,
+            "teams_below_target": 0,
+            "missing_url_count": 0,
+            "lowest_coverage": [],
+        }
+
+    coverage.to_csv(MATCH_COVERAGE_CSV, index=False)
+    below = coverage[coverage["status"] != "ok"]
+    return {
+        "target_matches_per_team": min_team_matches,
+        "teams_at_target": int((coverage["status"] == "ok").sum()),
+        "teams_below_target": int(len(below)),
+        "missing_url_count": int((coverage["status"] == "missing_url").sum()),
+        "lowest_coverage": below.sort_values(["matches", "team"]).head(12).to_dict("records"),
+    }
+
+
 def train_models(
     matches_csv: str = MATCHES_CSV,
     season_year: int | None = None,
     recent_days: int = 60,
-    fallback_years: int = 1,
-    min_player_history_maps: int = 3,
+    fallback_years: int | None = None,
+    min_player_history_maps: int = 1,
+    min_team_matches: int = 20,
+    force: bool = False,
+    model_selection: dict | None = None,
 ) -> dict:
+    selections = normalize_model_selection(
+        model_selection if model_selection is not None else load_model_selection()
+    )
     matches = load_csv(matches_csv)
     if matches.empty:
         raise ValueError("No match data found. Run python scripts\\scrape.py --matches first.")
+    matches = canonicalize_match_dataframe(
+        matches,
+        registry_team_pages(season_year=None),
+    )
+    matches = filter_registry_tier1_matchups(
+        filter_curated_competition_history(matches)
+    )
+    fingerprint = dataset_fingerprint(matches)
+    metrics_path = Path(METRICS_PATH)
+    if (
+        not force
+        and metrics_path.exists()
+        and Path(PLAYER_MODEL_PATH).exists()
+        and Path(TEAM_MODEL_PATH).exists()
+        and Path(MAP_MODEL_PATH).exists()
+    ):
+        try:
+            existing_metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing_metrics = {}
+        if (
+            existing_metrics.get("dataset_fingerprint") == fingerprint
+            and existing_metrics.get("model_version") == MODEL_VERSION
+            and existing_metrics.get("model_selection") == selections
+        ):
+            return {**existing_metrics, "training_status": "skipped_unchanged"}
 
     player_training = build_player_training_data(
         matches,
@@ -429,37 +1776,118 @@ def train_models(
         season_year=season_year,
         fallback_years=fallback_years,
     )
+    sequential_state = team_training.attrs.get("sequential_state")
+    map_training = build_map_training_data(
+        matches,
+        team_training,
+        season_year=season_year,
+    )
 
-    player_model, player_metrics = train_player_model(player_training)
-    team_model, team_metrics = train_team_model(team_training)
+    player_models, player_metrics = train_player_model(
+        player_training,
+        selections["player"],
+    )
+    team_model, team_calibrator, team_metrics = train_team_model(
+        team_training,
+        selections["team"],
+    )
+    map_model_payload, map_metrics = train_map_model(
+        map_training,
+        selections["map"],
+    )
+    news_history = load_csv(NEWS_CSV)
 
     metadata = {
         "trained_at": datetime.utcnow().isoformat(timespec="seconds"),
+        "training_status": "trained",
+        "model_version": MODEL_VERSION,
+        "dataset_fingerprint": fingerprint,
         "matches_csv": str(matches_csv),
         "season_year": season_year,
         "recent_days": recent_days,
-        "fallback_years": fallback_years,
-        "min_player_history_maps": min_player_history_maps,
+        "model_selection": selections,
+        "history_scope": "curated_vct_history_plus_current_season",
+        "training_half_life_days": TRAINING_HALF_LIFE_DAYS,
+        "minimum_player_history_maps": 1,
+        "team_match_coverage": coverage_summary(matches, min_team_matches, season_year),
+        "match_schema": "player-map-v6-vct-tier-context",
         "player_training_rows": len(player_training),
         "team_training_rows": len(team_training),
+        "map_training_rows": len(map_training),
+        "player_effective_training_weight": float(
+            player_training.get("training_weight", pd.Series(dtype=float)).sum()
+        ),
+        "team_effective_training_weight": float(
+            team_training.get("training_weight", pd.Series(dtype=float)).sum()
+        ),
+        "map_effective_training_weight": float(
+            map_training.get("training_weight", pd.Series(dtype=float)).sum()
+        ),
+        "news_history_rows": len(news_history),
+        "news_training_status": "structured_rules_only_until_historical_event_coverage_is_sufficient",
         "player_metrics": player_metrics,
         "team_metrics": team_metrics,
+        "map_metrics": map_metrics,
     }
 
-    if player_model is not None:
+    if player_models is not None:
         save_model(
             PLAYER_MODEL_PATH,
-            {"model": player_model, "features": PLAYER_FEATURES, "metadata": metadata},
+            {
+                "model": player_models["point"],
+                "lower_model": player_models["lower"],
+                "upper_model": player_models["upper"],
+                "interval_adjustment": player_models["interval_adjustment"],
+                "selected_candidate": player_models["selected_candidate"],
+                "recommended_candidate": player_models["recommended_candidate"],
+                "selection_mode": player_models["selection_mode"],
+                "correction_weight": player_models["correction_weight"],
+                "features": PLAYER_FEATURES,
+                "residual_std": player_metrics.get("residual_std", 0.18),
+                "metadata": metadata,
+            },
         )
     if team_model is not None:
         save_model(
             TEAM_MODEL_PATH,
-            {"model": team_model, "features": TEAM_FEATURES, "metadata": metadata},
+            {
+                "model": team_model,
+                "calibrator": team_calibrator,
+                "model_kind": team_metrics.get("model_kind", "residual"),
+                "model_blend_weight": team_metrics.get("model_blend_weight", 1.0),
+                "probability_temperature": team_metrics.get(
+                    "probability_temperature",
+                    1.0,
+                ),
+                "max_model_delta": team_metrics.get(
+                    "max_model_delta",
+                    PROBABILITY_MAX_MODEL_DELTA,
+                ),
+                "selected_candidate": team_metrics.get("selected_candidate", "hgb_residual"),
+                "recommended_candidate": team_metrics.get("recommended_candidate", ""),
+                "selection_mode": team_metrics.get("selection_mode", "auto"),
+                "features": TEAM_FEATURES,
+                "sequential_state": sequential_state,
+                "metadata": metadata,
+            },
+        )
+    if map_model_payload is not None:
+        save_model(
+            MAP_MODEL_PATH,
+            {
+                **map_model_payload,
+                "sequential_state": sequential_state,
+                "metadata": metadata,
+            },
         )
 
     ensure_model_dir()
     with open(METRICS_PATH, "w", encoding="utf-8") as handle:
         json.dump(metadata, handle, indent=2)
+    save_model_selection(selections)
+    from ..storage import record_model_run
+
+    record_model_run(metadata)
 
     return metadata
 
@@ -469,26 +1897,31 @@ def main() -> None:
     parser.add_argument("--matches-csv", default=MATCHES_CSV)
     parser.add_argument("--season-year", type=int, default=datetime.utcnow().year)
     parser.add_argument("--recent-days", type=int, default=60)
-    parser.add_argument("--fallback-years", type=int, default=1)
-    parser.add_argument("--min-player-history-maps", type=int, default=3)
+    parser.add_argument("--fallback-years", type=int, default=0, help=argparse.SUPPRESS)
+    parser.add_argument("--min-player-history-maps", type=int, default=1, help=argparse.SUPPRESS)
+    parser.add_argument("--min-team-matches", type=int, default=20)
     parser.add_argument("--refresh-matches", action="store_true")
-    parser.add_argument("--limit-per-team", type=int, default=75)
+    parser.add_argument("--limit-per-team", type=int, default=0)
+    parser.add_argument("--force", action="store_true", help="Retrain even when the match dataset is unchanged.")
     args = parser.parse_args()
 
     if args.refresh_matches:
         scrape_matches(
             output_csv=args.matches_csv,
-            limit_per_team=args.limit_per_team,
+            limit_per_team=args.limit_per_team or None,
             team_pages=registry_team_pages(),
             season_year=args.season_year,
+            min_matches_per_team=args.min_team_matches,
         )
 
     metrics = train_models(
         matches_csv=args.matches_csv,
         season_year=args.season_year,
         recent_days=args.recent_days,
-        fallback_years=args.fallback_years,
-        min_player_history_maps=args.min_player_history_maps,
+        fallback_years=None,
+        min_player_history_maps=1,
+        min_team_matches=args.min_team_matches,
+        force=args.force,
     )
     print(json.dumps(metrics, indent=2))
 

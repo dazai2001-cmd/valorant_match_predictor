@@ -88,6 +88,30 @@ VCT_TIER1_TEAMS = {
     }
 }
 
+MANUAL_VLR_TEAMS = {
+    "JD Gaming": {
+        "team_id": "13576",
+        "slug": "jdg-esports",
+    },
+    "PCFIC Esports": {
+        "team_id": "3478",
+        "slug": "pcific-esports",
+    },
+}
+
+
+def manual_vlr_team(team: str) -> dict | None:
+    payload = MANUAL_VLR_TEAMS.get(team)
+    if not payload:
+        return None
+
+    return {
+        "team_id": payload["team_id"],
+        "matches_url": team_matches_url(payload["team_id"], team, payload["slug"]),
+        "profile_url": team_profile_url(payload["team_id"], team, payload["slug"]),
+    }
+
+
 def slugify_team(name: str) -> str:
     ascii_name = unicodedata.normalize("NFKD", str(name)).encode("ascii", "ignore").decode("ascii")
     slug = re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
@@ -152,11 +176,14 @@ def clean_bool(value, default: bool = True) -> str:
 
 
 def registry_dedupe_key(row: pd.Series) -> str:
+    season = str(row.get("season_year", VCT_TIER1_SEASON)).strip() or str(
+        VCT_TIER1_SEASON
+    )
     key = team_key(str(row.get("team", "")))
     if key:
-        return f"name:{key}"
+        return f"{season}:name:{key}"
     team_id = clean_team_id(row.get("team_id"))
-    return f"id:{team_id}" if team_id else ""
+    return f"{season}:id:{team_id}" if team_id else ""
 
 
 def normalize_registry(df: pd.DataFrame) -> pd.DataFrame:
@@ -233,10 +260,89 @@ def active_tier1_team_names(path: str = TEAMS_CSV, season_year: int = VCT_TIER1_
     return sorted(registry["team"].dropna().astype(str).unique())
 
 
-def registry_team_pages(path: str = TEAMS_CSV) -> dict[str, str]:
-    registry = active_tier1_registry(path)
+def filter_registry_tier1_matchups(
+    matches: pd.DataFrame,
+    path: str = TEAMS_CSV,
+) -> pd.DataFrame:
+    """Exclude unclassified matches against non-Tier-1 teams when a season registry exists."""
+    required = {"team", "opponent"}
+    if matches.empty or not required.issubset(matches.columns):
+        return matches
+
+    registry = load_team_registry(path)
+    registry = registry[
+        (registry["tier"].astype(str).str.lower() == "tier1")
+        & (registry["active"].astype(str).str.lower() == "true")
+    ]
     if registry.empty:
-        return dict(TEAM_PAGES)
+        return matches
+
+    output = matches.copy()
+    date_values = output.get(
+        "match_date",
+        pd.Series(pd.NaT, index=output.index),
+    )
+    dates = pd.to_datetime(date_values, utc=True, errors="coerce")
+    season_values = output.get(
+        "season_year",
+        pd.Series(float("nan"), index=output.index),
+    )
+    years = pd.to_numeric(season_values, errors="coerce").fillna(dates.dt.year)
+    tiers = output.get(
+        "competition_tier",
+        pd.Series("unknown", index=output.index),
+    ).fillna("unknown").astype(str).str.lower()
+    event_tiers = output.get(
+        "event_tier",
+        pd.Series("unknown", index=output.index),
+    ).fillna("unknown").astype(str).str.lower()
+    curated = tiers.isin({"tier1", "promotion"}) | event_tiers.eq("tier1")
+
+    registry_by_year = {
+        int(year): {team_key(name) for name in group["team"].astype(str)}
+        for year, group in registry.groupby(
+            pd.to_numeric(registry["season_year"], errors="coerce"),
+            dropna=True,
+        )
+        if pd.notna(year)
+    }
+    known_years = set(registry_by_year)
+    has_registry = years.isin(known_years)
+    tier1_matchup = pd.Series(False, index=output.index)
+    team_keys = output["team"].map(team_key)
+    opponent_keys = output["opponent"].map(team_key)
+    for year, names in registry_by_year.items():
+        year_mask = years.eq(year)
+        tier1_matchup |= year_mask & team_keys.isin(names) & opponent_keys.isin(names)
+
+    keep = curated | ~has_registry | tier1_matchup
+    filtered = output[keep].copy().reset_index(drop=True)
+    filtered.attrs.update(matches.attrs)
+    filtered.attrs["excluded_non_tier1_rows"] = int((~keep).sum())
+    return filtered
+
+
+def registry_team_pages(
+    path: str = TEAMS_CSV,
+    include_missing: bool = False,
+    season_year: int | None = VCT_TIER1_SEASON,
+) -> dict[str, str]:
+    registry = load_team_registry(path)
+    if not registry.empty:
+        registry = registry[
+            (registry["tier"].astype(str).str.lower() == "tier1")
+            & (registry["active"].astype(str).str.lower() == "true")
+        ]
+        if season_year is not None:
+            registry = registry[
+                registry["season_year"].astype(str) == str(season_year)
+            ]
+    if registry.empty:
+        return dict(TEAM_PAGES) if season_year in (None, VCT_TIER1_SEASON) else {}
+    if include_missing:
+        registry = registry[registry["team"].notna()].copy()
+        registry["matches_url"] = registry["matches_url"].fillna("").astype(str)
+        return dict(zip(registry["team"], registry["matches_url"]))
     registry = registry[
         registry["team"].notna()
         & registry["matches_url"].notna()
@@ -295,7 +401,12 @@ def seed_vct_tier1_teams(
     resolve_missing: bool = True,
 ) -> tuple[pd.DataFrame, dict]:
     current = load_team_registry(path)
-    existing_by_team = {team_key(row["team"]): row for _, row in current.iterrows()} if not current.empty else {}
+    current_season = current[
+        current["season_year"].astype(str) == str(season_year)
+    ] if not current.empty else current
+    existing_by_team = {
+        team_key(row["team"]): row for _, row in current_season.iterrows()
+    } if not current_season.empty else {}
 
     rows = []
     unresolved = []
@@ -310,6 +421,13 @@ def seed_vct_tier1_teams(
         matches_url = str(existing.get("matches_url", "")).strip() if existing is not None else ""
         profile_url = str(existing.get("profile_url", "")).strip() if existing is not None else ""
         resolved_at = str(existing.get("resolved_at", "")).strip() if existing is not None else ""
+
+        manual = manual_vlr_team(team)
+        if manual and (not team_id or not matches_url):
+            team_id = manual["team_id"]
+            matches_url = manual["matches_url"]
+            profile_url = manual["profile_url"]
+            resolved_at = resolved_at or now
 
         if resolve_missing and (not team_id or not matches_url) and not resolution_error:
             try:
@@ -345,17 +463,38 @@ def seed_vct_tier1_teams(
             }
         )
 
-    registry = normalize_registry(pd.DataFrame(rows))
+    other_seasons = current[
+        current["season_year"].astype(str) != str(season_year)
+    ]
+    registry = normalize_registry(
+        pd.concat([other_seasons, pd.DataFrame(rows)], ignore_index=True)
+    )
     save_team_registry(registry, path)
+    season_registry = registry[
+        registry["season_year"].astype(str) == str(season_year)
+    ]
     meta = {
         "season_year": season_year,
         "seeded_count": len(rows),
-        "resolved_count": int((registry["matches_url"].astype(str).str.strip() != "").sum()),
+        "resolved_count": int(
+            (season_registry["matches_url"].astype(str).str.strip() != "").sum()
+        ),
         "newly_resolved_count": resolved_count,
         "unresolved": unresolved,
         "resolution_error": resolution_error,
     }
     return registry, meta
+
+
+def upsert_season_registry(
+    rows: list[dict],
+    path: str = TEAMS_CSV,
+) -> pd.DataFrame:
+    current = load_team_registry(path)
+    incoming = normalize_registry(pd.DataFrame(rows))
+    combined = normalize_registry(pd.concat([current, incoming], ignore_index=True))
+    save_team_registry(combined, path)
+    return combined
 
 
 def discover_ranked_teams(path: str = TEAMS_CSV) -> pd.DataFrame:

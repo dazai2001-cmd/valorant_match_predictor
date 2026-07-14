@@ -1,0 +1,20 @@
+event_id,season_year,event_name,league,category,competition_tier,competition_strength_weight,include_training,event_url,team_count,match_count,source,verified_at
+2274,2025,VCT 2025: Americas Kickoff,VCT Americas,kickoff,tier1,1.0,True,https://www.vlr.gg/event/2274,12,22,curated_vct_event_id,2026-07-12T10:18:42
+2276,2025,VCT 2025: EMEA Kickoff,VCT EMEA,kickoff,tier1,1.0,True,https://www.vlr.gg/event/2276,12,22,curated_vct_event_id,2026-07-12T10:18:42
+2277,2025,VCT 2025: Pacific Kickoff,VCT Pacific,kickoff,tier1,1.0,True,https://www.vlr.gg/event/2277,12,22,curated_vct_event_id,2026-07-12T10:18:42
+2275,2025,VCT 2025: China Kickoff,VCT China,kickoff,tier1,1.0,True,https://www.vlr.gg/event/2275,12,22,curated_vct_event_id,2026-07-12T10:18:42
+2281,2025,Valorant Masters Bangkok 2025,VCT International,masters,tier1,1.05,True,https://www.vlr.gg/event/2281,4,17,curated_vct_event_id,2026-07-12T10:18:42
+2347,2025,VCT 2025: Americas Stage 1,VCT Americas,stage_1,tier1,1.0,True,https://www.vlr.gg/event/2347,8,42,curated_vct_event_id,2026-07-12T10:18:42
+2380,2025,VCT 2025: EMEA Stage 1,VCT EMEA,stage_1,tier1,1.0,True,https://www.vlr.gg/event/2380,8,42,curated_vct_event_id,2026-07-12T10:18:42
+2379,2025,VCT 2025: Pacific Stage 1,VCT Pacific,stage_1,tier1,1.0,True,https://www.vlr.gg/event/2379,8,42,curated_vct_event_id,2026-07-12T10:18:42
+2359,2025,VCT 2025: China Stage 1,VCT China,stage_1,tier1,1.0,True,https://www.vlr.gg/event/2359,8,42,curated_vct_event_id,2026-07-12T10:18:42
+2282,2025,Valorant Masters Toronto 2025,VCT International,masters,tier1,1.05,True,https://www.vlr.gg/event/2282,8,25,curated_vct_event_id,2026-07-12T10:18:42
+2501,2025,VCT 2025: Americas Stage 2,VCT Americas,stage_2,tier1,1.0,True,https://www.vlr.gg/event/2501,8,43,curated_vct_event_id,2026-07-12T10:18:42
+2498,2025,VCT 2025: EMEA Stage 2,VCT EMEA,stage_2,tier1,1.0,True,https://www.vlr.gg/event/2498,8,43,curated_vct_event_id,2026-07-12T10:18:42
+2500,2025,VCT 2025: Pacific Stage 2,VCT Pacific,stage_2,tier1,1.0,True,https://www.vlr.gg/event/2500,8,43,curated_vct_event_id,2026-07-12T10:18:42
+2499,2025,VCT 2025: China Stage 2,VCT China,stage_2,tier1,1.0,True,https://www.vlr.gg/event/2499,8,43,curated_vct_event_id,2026-07-12T10:18:42
+2283,2025,Valorant Champions 2025,VCT International,champions,tier1,1.08,True,https://www.vlr.gg/event/2283,8,34,curated_vct_event_id,2026-07-12T10:18:42
+2534,2025,VCT 2025: Americas Ascension,VCT Americas,ascension,promotion,0.55,True,https://www.vlr.gg/event/2534,4,19,curated_vct_event_id,2026-07-12T10:18:42
+2519,2025,VCT 2025: EMEA Ascension,VCT EMEA,ascension,promotion,0.55,True,https://www.vlr.gg/event/2519,4,12,curated_vct_event_id,2026-07-12T10:18:42
+2535,2025,VCT 2025: Pacific Ascension,VCT Pacific,ascension,promotion,0.55,True,https://www.vlr.gg/event/2535,6,27,curated_vct_event_id,2026-07-12T10:18:42
+2648,2025,VCT 2025: China Ascension,VCT China,ascension,promotion,0.55,True,https://www.vlr.gg/event/2648,4,16,curated_vct_event_id,2026-07-12T10:18:42

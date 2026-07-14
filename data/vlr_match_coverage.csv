@@ -1,0 +1,49 @@
+team,has_url,candidate_urls,matches,matches_total,legacy_matches,season_year,rows,target_matches,missing_matches,status
+JD Gaming,True,0,20,33,0,2026,250,20,0,ok
+T1,True,0,20,41,0,2026,240,20,0,ok
+BBL Esports,True,0,21,41,0,2026,275,20,0,ok
+Bilibili Gaming,True,0,21,45,0,2026,280,20,0,ok
+Dragon Ranger Gaming,True,0,21,43,0,2026,275,20,0,ok
+Gentle Mates,True,0,21,35,0,2026,280,20,0,ok
+Team Heretics,True,0,21,44,0,2026,285,20,0,ok
+Global Esports,True,0,22,35,0,2026,285,20,0,ok
+100 Thieves,True,0,23,38,0,2026,285,20,0,ok
+FUT Esports,True,0,23,34,0,2026,305,20,0,ok
+Nongshim RedForce,True,0,23,38,0,2026,335,20,0,ok
+TYLOO,True,0,23,38,0,2026,300,20,0,ok
+Team Vitality,True,0,23,37,0,2026,290,20,0,ok
+All Gamers,True,0,24,39,0,2026,325,20,0,ok
+Leviatan,True,0,25,40,0,2026,340,20,0,ok
+Xi Lai Gaming,True,0,26,48,0,2026,365,20,0,ok
+Edward Gaming,True,0,27,49,0,2026,360,20,0,ok
+G2 Esports,True,0,27,55,0,2026,350,20,0,ok
+Paper Rex,True,0,31,57,0,2026,445,20,0,ok
+NRG,True,0,33,56,0,2026,430,20,0,ok
+PCFIC Esports,True,0,9,9,0,2026,120,20,11,under_target
+Team Secret,True,0,11,23,0,2026,135,20,9,under_target
+VARREL,True,0,11,11,0,2026,135,20,9,under_target
+ZETA DIVISION,True,0,11,23,0,2026,135,20,9,under_target
+Eternal Fire,True,0,12,12,0,2026,150,20,8,under_target
+KRU Esports,True,0,12,30,0,2026,145,20,8,under_target
+ENVY,True,0,13,19,0,2026,165,20,7,under_target
+Evil Geniuses,True,0,13,30,0,2026,160,20,7,under_target
+LOUD,True,0,13,27,0,2026,165,20,7,under_target
+Cloud9,True,0,14,33,0,2026,165,20,6,under_target
+GIANTX,True,0,14,37,0,2026,170,20,6,under_target
+DetonatioN FocusMe,True,0,15,30,0,2026,185,20,5,under_target
+FURIA,True,0,15,28,0,2026,205,20,5,under_target
+Nova Esports,True,0,15,31,0,2026,180,20,5,under_target
+Wolves Esports,True,0,15,37,0,2026,190,20,5,under_target
+Natus Vincere,True,0,16,35,0,2026,200,20,4,under_target
+Sentinels,True,0,16,41,0,2026,195,20,4,under_target
+Trace Esports,True,0,16,34,0,2026,190,20,4,under_target
+DRX,True,0,17,37,0,2026,215,20,3,under_target
+Fnatic,True,0,17,42,0,2026,235,20,3,under_target
+FunPlus Phoenix,True,0,17,31,0,2026,210,20,3,under_target
+Gen.G,True,0,17,37,0,2026,235,20,3,under_target
+Rex Regum Qeon,True,0,17,42,0,2026,240,20,3,under_target
+FULL SENSE,True,0,18,22,0,2026,220,20,2,under_target
+Karmine Corp,True,0,18,33,0,2026,245,20,2,under_target
+MIBR,True,0,18,46,0,2026,240,20,2,under_target
+Titan Esports Club,True,0,18,33,0,2026,240,20,2,under_target
+Team Liquid,True,0,19,48,0,2026,230,20,1,under_target

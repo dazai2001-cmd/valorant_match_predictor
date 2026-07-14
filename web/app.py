@@ -1,29 +1,45 @@
 from __future__ import annotations
 
+import json
+from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
-from flask import Flask, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 
 from valorant_predictor.config import (
+    MATCH_COVERAGE_CSV,
     MATCHES_CSV,
     MATCH_PREDICTION_CSV,
     NEWS_CSV,
     PREDICTIONS_CSV,
     ROSTERS_CSV,
+    UPCOMING_MATCHES_CSV,
 )
 from valorant_predictor.prediction.predict_match import predict_match
 from valorant_predictor.prediction.predict_player_ratings import load_csv
+from valorant_predictor.jobs import job_manager
+from valorant_predictor.maintenance import train_and_evaluate, update_database_and_model
+from valorant_predictor.model_selection import (
+    MODEL_CHOICES,
+    load_model_selection,
+    normalize_model_selection,
+)
 from valorant_predictor.team_registry import (
     VCT_TIER1_SEASON,
-    active_tier1_registry,
     active_tier1_team_names,
     load_team_registry,
     registry_team_pages,
     seed_vct_tier1_teams,
 )
 from valorant_predictor.training.train_models import METRICS_PATH, train_models
-from valorant_predictor.vlr_client import scrape_matches, scrape_news, scrape_rosters
+from valorant_predictor.vlr_client import (
+    match_coverage_report,
+    scrape_matches,
+    scrape_news,
+    scrape_rosters,
+    scrape_upcoming_matches,
+)
 
 
 app = Flask(__name__)
@@ -51,12 +67,26 @@ def available_teams() -> list[str]:
     return []
 
 
+def available_maps() -> list[str]:
+    matches = load_csv(MATCHES_CSV)
+    if matches.empty or "map_name" not in matches.columns:
+        return []
+    scoped = matches[[column for column in ["match_id", "map_id", "map_name"] if column in matches]].copy()
+    scoped["map_name"] = scoped["map_name"].fillna("").astype(str).str.strip()
+    scoped = scoped[scoped["map_name"] != ""]
+    scoped = scoped.drop_duplicates(
+        subset=[column for column in ["match_id", "map_id"] if column in scoped.columns]
+    )
+    return sorted(scoped["map_name"].unique(), key=str.casefold)
+
+
 def round_records(df: pd.DataFrame, digits: int = 3) -> list[dict]:
     if df.empty:
         return []
     output = df.copy()
     for col in output.select_dtypes(include=["float", "float64"]).columns:
         output[col] = output[col].round(digits)
+    output = output.astype(object).where(pd.notna(output), None)
     return output.to_dict("records")
 
 
@@ -81,6 +111,12 @@ def load_last_prediction() -> dict:
                 "avg_news_adjustment": summary.get(f"{prefix}_avg_news_adjustment"),
                 "avg_roster_uncertainty": summary.get(f"{prefix}_avg_roster_uncertainty"),
                 "lineup_reliability": summary.get(f"{prefix}_lineup_reliability"),
+                "data_reliability": summary.get(f"{prefix}_data_reliability"),
+                "lineup_certainty": summary.get(f"{prefix}_lineup_certainty"),
+                "roster_continuity": summary.get(f"{prefix}_roster_continuity"),
+                "map_pool_edge": summary.get(f"{prefix}_map_pool_edge"),
+                "elo_edge": summary.get(f"{prefix}_elo_edge"),
+                "avg_player_uncertainty": summary.get(f"{prefix}_avg_player_uncertainty"),
             }
         )
 
@@ -95,33 +131,226 @@ def metrics_payload() -> dict:
     path = Path(METRICS_PATH)
     if not path.exists():
         return {}
-    return pd.read_json(path, typ="series").to_dict()
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def requested_model_selection() -> dict[str, str]:
+    return normalize_model_selection(
+        {
+            "player": request.form.get("player_model", "auto"),
+            "team": request.form.get("team_model", "auto"),
+            "map": request.form.get("map_model", "auto"),
+        }
+    )
+
+
+def model_reports(metrics: dict) -> list[dict]:
+    reports = []
+    definitions = [
+        ("player", "Player rating", "MAE", "mae", "baseline_mae", "last_10_baseline"),
+        ("team", "Match winner", "Log loss", "log_loss", "elo_log_loss", "elo_baseline"),
+        ("map", "Map winner", "Log loss", "log_loss", "baseline_log_loss", "map_form_baseline"),
+    ]
+    for task, title, metric_label, test_key, baseline_key, baseline_id in definitions:
+        task_metrics = metrics.get(f"{task}_metrics", {}) if metrics else {}
+        candidates = task_metrics.get("candidate_calibration", {})
+        rows = []
+        baseline_test = task_metrics.get(baseline_key)
+        rows.append(
+            {
+                "id": baseline_id,
+                "name": MODEL_CHOICES[task].get(baseline_id, baseline_id),
+                "validation_metric": None,
+                "validation_accuracy": None,
+                "test_metric": baseline_test,
+                "test_accuracy": task_metrics.get(
+                    "elo_accuracy" if task == "team" else "baseline_accuracy"
+                ),
+            }
+        )
+        for candidate_id, values in candidates.items():
+            evaluated = candidate_id == task_metrics.get("selected_candidate")
+            rows.append(
+                {
+                    "id": candidate_id,
+                    "name": MODEL_CHOICES[task].get(candidate_id, candidate_id),
+                    "validation_metric": values.get("mae" if task == "player" else "log_loss"),
+                    "validation_accuracy": values.get("accuracy"),
+                    "test_metric": task_metrics.get(test_key) if evaluated else None,
+                    "test_accuracy": task_metrics.get("accuracy") if evaluated and task != "player" else None,
+                }
+            )
+        evaluated_id = task_metrics.get("selected_candidate", "")
+        recommended_id = task_metrics.get("recommended_candidate", evaluated_id)
+        active_for_predictions = task_metrics.get(
+            "active_for_predictions",
+            task_metrics.get("enabled", True),
+        )
+        if task == "player":
+            active_id = (
+                baseline_id
+                if evaluated_id == baseline_id
+                or float(task_metrics.get("correction_weight", 0.0) or 0.0) <= 0.0
+                else evaluated_id
+            )
+        else:
+            active_id = evaluated_id if active_for_predictions else baseline_id
+        passed_safeguard = bool(
+            task_metrics.get(
+                "enabled",
+                task == "player"
+                and float(task_metrics.get("skill_vs_baseline", 0.0) or 0.0) > 0.0,
+            )
+        )
+        reports.append(
+            {
+                "task": task,
+                "title": title,
+                "metric_label": metric_label,
+                "rows": rows,
+                "active": active_id,
+                "evaluated": evaluated_id,
+                "recommended": recommended_id,
+                "selection_mode": task_metrics.get("selection_mode", "auto"),
+                "passed_safeguard": passed_safeguard,
+                "candidate_rejected": bool(
+                    evaluated_id
+                    and active_id != evaluated_id
+                    and task_metrics.get("selection_mode", "auto") == "auto"
+                ),
+                "test_rows": task_metrics.get("test_rows"),
+                "test_matches": task_metrics.get("test_matches"),
+                "test_start": task_metrics.get("test_start", ""),
+                "interval_coverage": task_metrics.get("interval_test_coverage") if task == "player" else None,
+                "skill_vs_baseline": task_metrics.get("skill_vs_baseline") if task == "player" else None,
+                "brier_score": task_metrics.get("brier_score") if task != "player" else None,
+                "reliability": task_metrics.get("model_reliability"),
+                "model_blend_weight": task_metrics.get("model_blend_weight") if task != "player" else None,
+                "probability_temperature": task_metrics.get("probability_temperature") if task != "player" else None,
+                "max_model_delta": task_metrics.get("max_model_delta") if task != "player" else None,
+            }
+        )
+    return reports
+
+
+@lru_cache(maxsize=8)
+def _computed_match_coverage(
+    matches_mtime_ns: int,
+    min_matches: int,
+    season_year: int,
+) -> pd.DataFrame:
+    matches = load_csv(MATCHES_CSV)
+    return match_coverage_report(
+        matches,
+        registry_team_pages(include_missing=True),
+        min_matches_per_team=min_matches,
+        season_year=season_year,
+    )
+
+
+def match_coverage_payload(
+    min_matches: int = 20,
+    season_year: int = VCT_TIER1_SEASON,
+) -> dict:
+    path = Path(MATCHES_CSV)
+    matches_mtime_ns = path.stat().st_mtime_ns if path.exists() else 0
+    coverage = _computed_match_coverage(matches_mtime_ns, min_matches, season_year)
+    if coverage.empty:
+        coverage = load_csv(MATCH_COVERAGE_CSV)
+    if coverage.empty:
+        return {}
+
+    below = coverage[coverage["status"].astype(str) != "ok"].copy()
+    return {
+        "target": min_matches,
+        "season_year": season_year,
+        "teams": len(coverage),
+        "teams_at_target": int((coverage["status"].astype(str) == "ok").sum()),
+        "teams_below_target": len(below),
+        "teams_with_legacy_data": int((coverage.get("legacy_matches", 0) > 0).sum())
+        if "legacy_matches" in coverage.columns
+        else 0,
+        "lowest": round_records(below.sort_values(["matches", "team"]).head(8)),
+    }
+
+
+def roster_coverage_payload(target_players: int = 5) -> dict:
+    teams = available_teams()
+    if not teams:
+        return {}
+
+    rosters = load_csv(ROSTERS_CSV)
+    counts = {team: 0 for team in teams}
+    if not rosters.empty and {"team", "player"}.issubset(rosters.columns):
+        scoped = rosters[rosters["team"].isin(teams)].copy()
+        if "is_staff" in scoped.columns:
+            scoped = scoped[~scoped["is_staff"].astype(str).str.lower().isin(["true", "1", "yes"])]
+        if "is_active_player" in scoped.columns:
+            scoped = scoped[scoped["is_active_player"].astype(str).str.lower().isin(["true", "1", "yes"])]
+
+        grouped = scoped.groupby("team")["player"].nunique()
+        counts.update({team: int(count) for team, count in grouped.items()})
+
+    below = [
+        {"team": team, "players": count, "target_players": target_players}
+        for team, count in sorted(counts.items())
+        if count < target_players
+    ]
+    return {
+        "target_players": target_players,
+        "teams": len(teams),
+        "teams_at_target": sum(1 for count in counts.values() if count >= target_players),
+        "teams_below_target": len(below),
+        "lowest": below[:8],
+    }
+
+
+def upcoming_matches_payload(limit: int = 16) -> list[dict]:
+    upcoming = load_csv(UPCOMING_MATCHES_CSV)
+    if upcoming.empty:
+        return []
+    output = upcoming.copy()
+    output["match_date_sort"] = pd.to_datetime(output.get("match_date"), utc=True, errors="coerce")
+    now = pd.Timestamp.now(tz="UTC")
+    output = output[
+        output["match_date_sort"].isna()
+        | (output["match_date_sort"] >= now - pd.Timedelta(hours=4))
+    ].sort_values("match_date_sort", na_position="last")
+    output["display_date"] = output["match_date_sort"].dt.strftime("%a %d %b, %H:%M UTC")
+    return round_records(output.head(limit))
 
 
 def base_context(**extra) -> dict:
     teams = available_teams()
     default_team1 = request.form.get("team1") or (teams[0] if teams else "")
     default_team2 = request.form.get("team2") or ("Sentinels" if "Sentinels" in teams else (teams[1] if len(teams) > 1 else ""))
+    metrics = metrics_payload()
+    job = job_manager.snapshot()
     context = {
         "teams": teams,
+        "map_options": available_maps(),
         "selected": {
             "team1": default_team1,
             "team2": default_team2,
             "best_of": request.form.get("best_of", "3"),
             "season_year": request.form.get("season_year", "2026"),
-            "recent_days": request.form.get("recent_days", ""),
             "recent_maps": request.form.get("recent_maps", "10"),
             "recent_news_days": request.form.get("recent_news_days", "45"),
-            "limit_per_team": request.form.get("limit_per_team", "75"),
-            "news_pages": request.form.get("news_pages", "3"),
-            "use_trained_models": bool_form("use_trained_models"),
-            "refresh_matches": bool_form("refresh_matches"),
-            "refresh_news": bool_form("refresh_news"),
-            "refresh_rosters": bool_form("refresh_rosters"),
+            "maps": [request.form.get(f"map_{index}", "") for index in range(1, 6)],
         },
         "last_prediction": load_last_prediction(),
-        "metrics": metrics_payload(),
-        "team_registry": round_records(active_tier1_registry()),
+        "metrics": metrics,
+        "model_choices": MODEL_CHOICES,
+        "model_selection": load_model_selection(),
+        "model_reports": model_reports(metrics),
+        "job": job,
+        "job_running": job.get("status") in {"queued", "running"},
+        "match_coverage": match_coverage_payload(),
+        "roster_coverage": roster_coverage_payload(),
+        "upcoming_matches": upcoming_matches_payload(),
     }
     context.update(extra)
     return context
@@ -138,25 +367,32 @@ def predict_route():
         team1 = request.form["team1"]
         team2 = request.form["team2"]
         season_year = int_form("season_year")
-        recent_days = int_form("recent_days")
         recent_maps = int_form("recent_maps", 10) or 10
         recent_news_days = int_form("recent_news_days", 45) or 45
         best_of = int_form("best_of", 3) or 3
+        map_values = [request.form.get(f"map_{index}", "").strip() for index in range(1, best_of + 1)]
+        selected_maps = [value for value in map_values if value]
+        if selected_maps and len(selected_maps) != best_of:
+            raise ValueError(f"Choose all {best_of} maps for a Bo{best_of}, or leave every map on Auto.")
+        if len(set(selected_maps)) != len(selected_maps):
+            raise ValueError("Each selected map must be unique.")
 
         if team1 == team2:
             raise ValueError("Choose two different teams.")
 
         if bool_form("refresh_matches"):
+            seed_vct_tier1_teams(resolve_missing=True)
             scrape_matches(
                 output_csv=MATCHES_CSV,
-                limit_per_team=int_form("limit_per_team", 75) or 75,
+                limit_per_team=None,
                 team_pages=registry_team_pages(),
                 season_year=season_year,
-                recent_days=recent_days,
+                min_matches_per_team=20,
             )
         if bool_form("refresh_news"):
             scrape_news(output_csv=NEWS_CSV, pages=int_form("news_pages", 3) or 3)
         if bool_form("refresh_rosters"):
+            seed_vct_tier1_teams(resolve_missing=True)
             scrape_rosters(output_csv=ROSTERS_CSV, team_pages=registry_team_pages())
 
         summary, players, team_summaries = predict_match(
@@ -166,8 +402,13 @@ def predict_route():
             recent_maps=recent_maps,
             recent_news_days=recent_news_days,
             season_year=season_year,
-            recent_days=recent_days,
+            recent_days=None,
             use_trained_models=bool_form("use_trained_models"),
+            match_date=request.form.get("match_date") or None,
+            event_name=request.form.get("event_name", ""),
+            event_stage=request.form.get("event_stage", ""),
+            current_patch=request.form.get("patch", ""),
+            selected_maps=selected_maps,
         )
         result = {
             "summary": summary,
@@ -181,31 +422,34 @@ def predict_route():
 
 @app.post("/train")
 def train_route():
-    try:
-        season_year = int_form("train_season_year", 2026)
-        recent_days = int_form("train_recent_days", 60) or 60
-        limit_per_team = int_form("train_limit_per_team", 75) or 75
-        fallback_years = int_form("fallback_years", 1) or 1
-        min_history = int_form("min_player_history_maps", 3) or 3
-
-        if bool_form("train_refresh_matches"):
-            scrape_matches(
-                output_csv=MATCHES_CSV,
-                limit_per_team=limit_per_team,
-                team_pages=registry_team_pages(),
-                season_year=season_year,
-            )
-
-        metrics = train_models(
-            matches_csv=MATCHES_CSV,
-            season_year=season_year,
-            recent_days=recent_days,
-            fallback_years=fallback_years,
-            min_player_history_maps=min_history,
+    selections = requested_model_selection()
+    job_manager.start(
+        "train_and_evaluate",
+        lambda progress: train_and_evaluate(
+            progress,
+            model_selection=selections,
         )
-        return render_template("index.html", **base_context(train_result=metrics, active_tab="train"))
-    except Exception as exc:
-        return render_template("index.html", **base_context(error=str(exc), active_tab="train")), 400
+    )
+    return redirect(url_for("index"))
+
+
+@app.post("/jobs/database-update")
+def database_update_job_route():
+    selections = requested_model_selection()
+    job_manager.start(
+        "database_update",
+        lambda progress: update_database_and_model(
+            progress,
+            history_season=2025,
+            model_selection=selections,
+        ),
+    )
+    return redirect(url_for("index"))
+
+
+@app.get("/api/job")
+def job_status_route():
+    return jsonify(job_manager.snapshot())
 
 
 @app.post("/teams/sync")
@@ -227,6 +471,71 @@ def sync_teams_route():
         )
     except Exception as exc:
         return render_template("index.html", **base_context(error=str(exc), active_tab="teams")), 400
+
+
+@app.post("/data/update/matches")
+def update_matches_route():
+    try:
+        seed_vct_tier1_teams(resolve_missing=True)
+        matches = scrape_matches(
+            output_csv=MATCHES_CSV,
+            limit_per_team=None,
+            team_pages=registry_team_pages(),
+            min_matches_per_team=20,
+            season_year=VCT_TIER1_SEASON,
+        )
+        scrape_summary = matches.attrs.get("scrape_summary", {})
+        coverage = match_coverage_report(
+            matches,
+            registry_team_pages(include_missing=True),
+            min_matches_per_team=20,
+            season_year=VCT_TIER1_SEASON,
+        )
+        teams_at_target = int((coverage["status"].astype(str) == "ok").sum()) if not coverage.empty else 0
+        message = (
+            f"Parsed {scrape_summary.get('parsed_matches', 0)} new matches and reused "
+            f"{scrape_summary.get('reused_matches', 0)} existing matches. "
+            f"Stored {len(matches)} player-map rows; {teams_at_target} / {len(coverage)} teams "
+            f"have 20+ {VCT_TIER1_SEASON} games."
+        )
+        return render_template("index.html", **base_context(success=message, active_tab="teams"))
+    except Exception as exc:
+        return render_template("index.html", **base_context(error=str(exc), active_tab="teams")), 400
+
+
+@app.post("/data/update/rosters")
+def update_rosters_route():
+    try:
+        seed_vct_tier1_teams(resolve_missing=True)
+        rosters = scrape_rosters(output_csv=ROSTERS_CSV, team_pages=registry_team_pages())
+        coverage = roster_coverage_payload()
+        message = (
+            f"Updated roster/player names with {len(rosters)} rows. "
+            f"{coverage.get('teams_at_target', 0)} / {coverage.get('teams', 0)} teams have "
+            f"{coverage.get('target_players', 5)}+ active players."
+        )
+        return render_template("index.html", **base_context(success=message, active_tab="teams"))
+    except Exception as exc:
+        return render_template("index.html", **base_context(error=str(exc), active_tab="teams")), 400
+
+
+@app.post("/data/update/upcoming")
+def update_upcoming_route():
+    try:
+        upcoming = scrape_upcoming_matches(
+            output_csv=UPCOMING_MATCHES_CSV,
+            team_pages=registry_team_pages(),
+        )
+        message = f"Updated {len(upcoming)} upcoming Tier 1 matches from VLR."
+        return render_template(
+            "index.html",
+            **base_context(success=message, active_tab="upcoming"),
+        )
+    except Exception as exc:
+        return render_template(
+            "index.html",
+            **base_context(error=str(exc), active_tab="upcoming"),
+        ), 400
 
 
 if __name__ == "__main__":

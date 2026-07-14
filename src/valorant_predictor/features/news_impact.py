@@ -1,45 +1,43 @@
+import hashlib
 import re
-from datetime import datetime
+import unicodedata
+from datetime import datetime, timedelta
 
 import pandas as pd
 
 
-NEWS_RULES = [
-    ("injury", -0.14, "injury"),
-    ("injured", -0.14, "injury"),
-    ("wrist", -0.12, "injury"),
-    ("torn", -0.12, "injury"),
-    ("illness", -0.10, "illness"),
-    ("sick", -0.10, "illness"),
-    ("miss", -0.09, "availability"),
-    ("out for", -0.09, "availability"),
-    ("out of", -0.07, "availability"),
-    ("shuts down", -0.14, "availability"),
-    ("benched", -0.09, "benching"),
-    ("bench", -0.08, "benching"),
-    ("released", -0.08, "roster loss"),
-    ("departs", -0.08, "roster loss"),
-    ("parts ways", -0.08, "roster loss"),
-    ("leaves", -0.07, "roster loss"),
-    ("retires", -0.12, "retirement"),
-    ("retire", -0.12, "retirement"),
-    ("visa", -0.06, "availability"),
-    ("suspended", -0.12, "availability"),
-    ("returns", 0.07, "return"),
-    ("back", 0.04, "return"),
-    ("signs", 0.05, "signing"),
-    ("joins", 0.05, "signing"),
-    ("adds", 0.04, "signing"),
-    ("promotes", 0.04, "promotion"),
-    ("completes", 0.04, "roster stability"),
-    ("qualify", 0.03, "momentum"),
-    ("secures", 0.03, "momentum"),
-    ("wins", 0.03, "momentum"),
+NEWS_EVENT_RULES = [
+    {"phrases": ["injury", "injured", "wrist", "torn"], "event_type": "injury", "performance_delta": -0.08, "availability_delta": -0.12, "uncertainty_delta": 0.12, "confidence": 0.90, "expiry_days": 28},
+    {"phrases": ["illness", "sick"], "event_type": "illness", "performance_delta": -0.04, "availability_delta": -0.08, "uncertainty_delta": 0.08, "confidence": 0.80, "expiry_days": 14},
+    {"phrases": ["miss", "out for", "out of", "shuts down", "suspended"], "event_type": "unavailable", "performance_delta": 0.0, "availability_delta": -0.35, "uncertainty_delta": 0.18, "confidence": 0.90, "expiry_days": 35},
+    {"phrases": ["benched", "bench"], "event_type": "benching", "performance_delta": 0.0, "availability_delta": -0.70, "uncertainty_delta": 0.25, "confidence": 0.95, "expiry_days": 120},
+    {"phrases": ["released", "departs", "parts ways", "leaves", "retires", "retire"], "event_type": "roster_exit", "performance_delta": 0.0, "availability_delta": -0.85, "uncertainty_delta": 0.28, "confidence": 0.95, "expiry_days": 180},
+    {"phrases": ["visa"], "event_type": "visa", "performance_delta": 0.0, "availability_delta": -0.20, "uncertainty_delta": 0.15, "confidence": 0.75, "expiry_days": 35},
+    {"phrases": ["returns", "back"], "event_type": "return", "performance_delta": 0.02, "availability_delta": 0.25, "uncertainty_delta": -0.10, "confidence": 0.80, "expiry_days": 28},
+    {"phrases": ["signs", "joins", "adds", "promotes"], "event_type": "roster_join", "performance_delta": 0.0, "availability_delta": 0.0, "uncertainty_delta": 0.08, "confidence": 0.85, "expiry_days": 75},
+    {"phrases": ["completes roster", "roster complete"], "event_type": "roster_complete", "performance_delta": 0.0, "availability_delta": 0.0, "uncertainty_delta": -0.08, "confidence": 0.75, "expiry_days": 60},
 ]
 
 
 def normalize_name(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", str(value).lower()).strip()
+    ascii_value = (
+        unicodedata.normalize("NFKD", str(value))
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+    return re.sub(r"[^a-z0-9]+", " ", ascii_value.lower()).strip()
+
+
+def contains_normalized_entity(text_norm: str, entity: str) -> bool:
+    entity_norm = normalize_name(entity)
+    if not entity_norm:
+        return False
+    return bool(
+        re.search(
+            rf"(?<![a-z0-9]){re.escape(entity_norm)}(?![a-z0-9])",
+            text_norm,
+        )
+    )
 
 
 def parse_news_date(value: str | float | None) -> datetime | None:
@@ -50,6 +48,9 @@ def parse_news_date(value: str | float | None) -> datetime | None:
             return datetime.strptime(str(value), fmt)
         except ValueError:
             continue
+    parsed = pd.to_datetime(value, utc=True, errors="coerce")
+    if pd.notna(parsed):
+        return parsed.tz_convert(None).to_pydatetime()
     return None
 
 
@@ -57,11 +58,52 @@ def score_news_text(text: str) -> tuple[float, list[str]]:
     text_norm = normalize_name(text)
     total = 0.0
     reasons = []
-    for phrase, score, label in NEWS_RULES:
-        if normalize_name(phrase) in text_norm:
-            total += score
-            reasons.append(label)
-    return max(-0.25, min(0.16, total)), sorted(set(reasons))
+    for rule in NEWS_EVENT_RULES:
+        if any(contains_normalized_entity(text_norm, phrase) for phrase in rule["phrases"]):
+            total += float(rule["performance_delta"]) * float(rule["confidence"])
+            reasons.append(str(rule["event_type"]))
+    return max(-0.20, min(0.08, total)), sorted(set(reasons))
+
+
+def structure_news_events(
+    news_df: pd.DataFrame,
+    reference_date: datetime | None = None,
+) -> pd.DataFrame:
+    if news_df.empty:
+        return pd.DataFrame()
+    reference_date = reference_date or datetime.utcnow()
+    events = []
+    for _, article in news_df.fillna("").iterrows():
+        article_text = f"{article.get('title', '')} {article.get('summary', '')}"
+        normalized = normalize_name(article_text)
+        published = parse_news_date(article.get("published")) or reference_date
+        for rule in NEWS_EVENT_RULES:
+            matched = [
+                phrase
+                for phrase in rule["phrases"]
+                if contains_normalized_entity(normalized, phrase)
+            ]
+            if not matched:
+                continue
+            event_key = f"{article.get('url', '')}|{rule['event_type']}"
+            events.append(
+                {
+                    "event_id": hashlib.sha256(event_key.encode("utf-8")).hexdigest()[:20],
+                    "url": article.get("url", ""),
+                    "title": article.get("title", ""),
+                    "article_text": article_text,
+                    "published": published.isoformat(timespec="seconds"),
+                    "effective_at": published.isoformat(timespec="seconds"),
+                    "expires_at": (published + timedelta(days=int(rule["expiry_days"]))).isoformat(timespec="seconds"),
+                    "event_type": rule["event_type"],
+                    "matched_phrases": ";".join(matched),
+                    "performance_delta": rule["performance_delta"],
+                    "availability_delta": rule["availability_delta"],
+                    "uncertainty_delta": rule["uncertainty_delta"],
+                    "confidence": rule["confidence"],
+                }
+            )
+    return pd.DataFrame(events).drop_duplicates(subset=["event_id"], keep="last") if events else pd.DataFrame()
 
 
 def recency_weight(published: str | None, reference_date: datetime | None, recent_days: int) -> float:
@@ -88,40 +130,61 @@ def player_news_adjustments(
         return adjustments
 
     player_rows = players[["team", "player"]].drop_duplicates().to_dict("records")
+    events = structure_news_events(news_df, reference_date=reference_date)
+    if events.empty:
+        return adjustments
 
-    for _, article in news_df.fillna("").iterrows():
-        article_text = f"{article.get('title', '')} {article.get('summary', '')}"
+    for _, event in events.fillna("").iterrows():
+        article_text = event.get("article_text", "")
         article_norm = normalize_name(article_text)
-        base_score, labels = score_news_text(article_text)
-        if base_score == 0:
+        expires_at = parse_news_date(event.get("expires_at"))
+        if expires_at and (reference_date or datetime.utcnow()) > expires_at:
             continue
-
-        weight = recency_weight(article.get("published"), reference_date, recent_days)
+        weight = recency_weight(event.get("published"), reference_date, recent_days)
         if weight <= 0:
             continue
+        confidence = float(event.get("confidence", 0.5))
 
         for row in player_rows:
             team = row["team"]
             player = row["player"]
-            team_hit = normalize_name(team) in article_norm
-            player_hit = normalize_name(player) in article_norm
+            team_hit = contains_normalized_entity(article_norm, team)
+            player_hit = contains_normalized_entity(article_norm, player)
             if not team_hit and not player_hit:
                 continue
 
-            strength = 1.0 if player_hit else 0.22
-            score = base_score * weight * strength
+            strength = 1.0 if player_hit else 0.18
+            score = float(event.get("performance_delta", 0.0)) * confidence * weight * strength
+            availability = float(event.get("availability_delta", 0.0)) * confidence * weight * strength
+            uncertainty = float(event.get("uncertainty_delta", 0.0)) * confidence * weight * strength
             key = (team, player)
-            current = adjustments.setdefault(key, {"adjustment": 0.0, "reasons": []})
+            current = adjustments.setdefault(
+                key,
+                {
+                    "adjustment": 0.0,
+                    "availability_adjustment": 0.0,
+                    "uncertainty_adjustment": 0.0,
+                    "reasons": [],
+                },
+            )
             current["adjustment"] += score
+            current["availability_adjustment"] += availability
+            current["uncertainty_adjustment"] += uncertainty
             current["reasons"].append(
                 {
-                    "title": article.get("title", ""),
-                    "url": article.get("url", ""),
-                    "labels": labels,
+                    "title": event.get("title", ""),
+                    "url": event.get("url", ""),
+                    "labels": [event.get("event_type", "news")],
                     "score": round(score, 4),
+                    "availability": round(availability, 4),
+                    "uncertainty": round(uncertainty, 4),
+                    "confidence": confidence,
+                    "expires_at": event.get("expires_at", ""),
                 }
             )
 
     for value in adjustments.values():
-        value["adjustment"] = max(-0.30, min(0.18, value["adjustment"]))
+        value["adjustment"] = max(-0.20, min(0.08, value["adjustment"]))
+        value["availability_adjustment"] = max(-0.90, min(0.30, value["availability_adjustment"]))
+        value["uncertainty_adjustment"] = max(-0.15, min(0.35, value["uncertainty_adjustment"]))
     return adjustments

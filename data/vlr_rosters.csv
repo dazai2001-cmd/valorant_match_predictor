@@ -1,78 +1,447 @@
 team,player,player_id,player_url,real_name,roster_role,status,is_active_player,is_staff,team_url,scraped_at
-G2 Esports,valyn,3885,https://www.vlr.gg/player/3885/valyn,Jacob Batio,active,active,True,False,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
-G2 Esports,jawgemo,3993,https://www.vlr.gg/player/3993/jawgemo,Alexander Mor,active,active,True,False,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
-G2 Esports,BABYBAY,2170,https://www.vlr.gg/player/2170/babybay,Andrej Francisty,active,active,True,False,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
-G2 Esports,trent,15500,https://www.vlr.gg/player/15500/trent,Trent Cairns,active,active,True,False,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
-G2 Esports,leaf,7873,https://www.vlr.gg/player/7873/leaf,Nathan Orf,active,active,True,False,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
-G2 Esports,Ambrose,63508,https://www.vlr.gg/player/63508/ambrose,Ambrose Lai,manager,manager,False,True,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
-G2 Esports,JoshRT,52,https://www.vlr.gg/player/52/joshrt,Josh Lee,head coach,head coach,False,True,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
-G2 Esports,shhhack,6899,https://www.vlr.gg/player/6899/shhhack,Peter Belej,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
-G2 Esports,Robert,61050,https://www.vlr.gg/player/61050/robert,Robert Yip,performance coach,performance coach,False,True,https://www.vlr.gg/team/11058/g2-esports/,2026-07-09T17:47:05
-Xi Lai Gaming,WsLeo,24308,https://www.vlr.gg/player/24308/wsleo,Huang Pinwei (黄品维),active,active,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
-Xi Lai Gaming,Lysoar,37489,https://www.vlr.gg/player/37489/lysoar,Liang Youhao (梁优好),active,active,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
-Xi Lai Gaming,NoMan,11527,https://www.vlr.gg/player/11527/noman,James Man,active,active,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
-Xi Lai Gaming,Rarga,22047,https://www.vlr.gg/player/22047/rarga,Arthur Churyumov,active,active,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
-Xi Lai Gaming,happywei,37927,https://www.vlr.gg/player/37927/happywei,Deng Minwei (邓闵维),active,active,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
-Xi Lai Gaming,Arty,4343,https://www.vlr.gg/player/4343/arty,Yang Zhe (杨喆),manager,manager,False,True,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
-Xi Lai Gaming,hvoya,1348,https://www.vlr.gg/player/1348/hvoya,Aleksandr Eremin,head coach,head coach,False,True,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
-Xi Lai Gaming,steady,1874,https://www.vlr.gg/player/1874/steady,Dmitry Prutkov,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
-Xi Lai Gaming,Coffin0,50163,https://www.vlr.gg/player/50163/coffin0,Tao Yumeng (陶禹萌),staff,staff,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-09T17:47:07
-Fnatic,Boaster,438,https://www.vlr.gg/player/438/boaster,Jake Howlett,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
-Fnatic,crashies,4,https://www.vlr.gg/player/4/crashies,Austin Roberts,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
-Fnatic,kaajak,9554,https://www.vlr.gg/player/9554/kaajak,Kajetan Haremski,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
-Fnatic,Veqaj,12928,https://www.vlr.gg/player/12928/veqaj,Sylvain Pattyn,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
-Fnatic,Cloud,4181,https://www.vlr.gg/player/4181/cloud,Kirill Nehozhin,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
-Fnatic,Alfajer,9810,https://www.vlr.gg/player/9810/alfajer,Emir Ali Beder,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
-Fnatic,CoJo,18972,https://www.vlr.gg/player/18972/cojo,Colin Johnson,manager,manager,False,True,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
-Fnatic,ENGH,460,https://www.vlr.gg/player/460/engh,Andrey Sholokhov,head coach,head coach,False,True,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
-Fnatic,Desmo,195,https://www.vlr.gg/player/195/desmo,Casper Rasmussen,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
-Fnatic,Szed,53027,https://www.vlr.gg/player/53027/szed,Philipp Schickor,performance coach,performance coach,False,True,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
-Fnatic,Milan,4010,https://www.vlr.gg/player/4010/milan,Milan de Meij,head coach,head coach,False,True,https://www.vlr.gg/team/2593/fnatic/,2026-07-09T17:47:08
-Rex Regum Qeon,crazyguy,1430,https://www.vlr.gg/player/1430/crazyguy,Ngô Công Anh,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
-Rex Regum Qeon,Monyet,8497,https://www.vlr.gg/player/8497/monyet,Cahya Nugraha,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
-Rex Regum Qeon,xffero,4871,https://www.vlr.gg/player/4871/xffero,David Monangin,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
-Rex Regum Qeon,Xan,11737,https://www.vlr.gg/player/11737/xan,Xan Ng,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
-Rex Regum Qeon,Jemkin,24895,https://www.vlr.gg/player/24895/jemkin,Maksim Batorov,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
-Rex Regum Qeon,Kushy,4866,https://www.vlr.gg/player/4866/kushy,Bryan Carlos Setiawan,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
-Rex Regum Qeon,SeasoNz,61084,https://www.vlr.gg/player/61084/seasonz,Joe Lai,manager,manager,False,True,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
-Rex Regum Qeon,Jovi,6570,https://www.vlr.gg/player/6570/jovi,Jovanni Vera,head coach,head coach,False,True,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
-Rex Regum Qeon,Warbirds,12224,https://www.vlr.gg/player/12224/warbirds,Evan Olzem,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
-Rex Regum Qeon,Rebecca,50175,https://www.vlr.gg/player/50175/rebecca,Rebecca Wong,performance coach,performance coach,False,True,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
-Rex Regum Qeon,Jomengz,62037,https://www.vlr.gg/player/62037/jomengz,Jonathan Hoo,staff,staff,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-09T17:47:09
-Gen.G,Ash,25017,https://www.vlr.gg/player/25017/ash,Ha Hyun-cheol (하현철),active,active,True,False,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
-Gen.G,Karon,34974,https://www.vlr.gg/player/34974/karon,Kim Won-tae (김원태),active,active,True,False,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
-Gen.G,t3xture,9196,https://www.vlr.gg/player/9196/t3xture,Kim Na-ra (김나라),active,active,True,False,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
-Gen.G,Efina,985,https://www.vlr.gg/player/985/efina,Kim Nak-yeon (김낙연),active,active,True,False,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
-Gen.G,Raxcal,48925,https://www.vlr.gg/player/48925/raxcal,Kim Min-seok (김민석),active,active,True,False,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
-Gen.G,Xiesta,62291,https://www.vlr.gg/player/62291/xiesta,Jung Si-hwan (정시환),Inactive,inactive,False,False,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
-Gen.G,ZynX,51099,https://www.vlr.gg/player/51099/zynx,Kim Dong-ha (김동하),Inactive,inactive,False,False,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
-Gen.G,solo,4562,https://www.vlr.gg/player/4562/solo,Kang Geun-chul (강근철),head coach,head coach,False,True,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
-Gen.G,HSK,21792,https://www.vlr.gg/player/21792/hsk,Kim Hae-seong (김해성),coach,coach,False,True,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
-Gen.G,peri,4560,https://www.vlr.gg/player/4560/peri,Jung Bum-ki (정범기),coach,coach,False,True,https://www.vlr.gg/team/17/gen-g/,2026-07-09T17:47:11
-Sentinels,johnqt,1265,https://www.vlr.gg/player/1265/johnqt,Mohamed Amine Ouarid,active,active,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
-Sentinels,Reduxx,8419,https://www.vlr.gg/player/8419/reduxx,Yassin Aboulalazm,active,active,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
-Sentinels,Jerrwin,34057,https://www.vlr.gg/player/34057/jerrwin,Gurjiwan Gill,active,active,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
-Sentinels,cortezia,5395,https://www.vlr.gg/player/5395/cortezia,Gabriel Cortez,active,active,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
-Sentinels,JonahP,4581,https://www.vlr.gg/player/4581/jonahp,Jonah Pulice,active,active,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
-Sentinels,Victor,261,https://www.vlr.gg/player/261/victor,Victor Wong,stand-in,stand-in,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
-Sentinels,Zyto,47462,https://www.vlr.gg/player/47462/zyto,Bryan Ybanez,manager,manager,False,True,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
-Sentinels,Ewok,8347,https://www.vlr.gg/player/8347/ewok,Marthinus Jacobus Van Der Walt,head coach,head coach,False,True,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
-Sentinels,GUNTER,28113,https://www.vlr.gg/player/28113/gunter,Luke Clives,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/2/sentinels/,2026-07-09T17:47:13
-Wolves Esports,glacier,49973,https://www.vlr.gg/player/49973/glacier,Liang Zhekai (梁哲恺),active,active,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
-Wolves Esports,yosemite,6022,https://www.vlr.gg/player/6022/yosemite,Wang Lei (王磊),active,active,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
-Wolves Esports,Spring,14125,https://www.vlr.gg/player/14125/spring,Liu Jiunting (刘俊霆),active,active,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
-Wolves Esports,Deryeon,9152,https://www.vlr.gg/player/9152/deryeon,Derrick Yee,active,active,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
-Wolves Esports,aluba,14441,https://www.vlr.gg/player/14441/aluba,Zhong Haojun (钟皓钧),active,active,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
-Wolves Esports,nothing,66083,https://www.vlr.gg/player/66083/nothing,Xie Junzheng (谢君正),Sub,sub,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
-Wolves Esports,Chao,61329,https://www.vlr.gg/player/61329/chao,,manager,manager,False,True,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
-Wolves Esports,alexRr,1163,https://www.vlr.gg/player/1163/alexrr,Alexander Frisch,head coach,head coach,False,True,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
-Wolves Esports,Ja7,61330,https://www.vlr.gg/player/61330/ja7,,staff,staff,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-09T17:47:14
-Paper Rex,invy,8504,https://www.vlr.gg/player/8504/invy,Adrian Jiggs Reyes,active,active,True,False,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
-Paper Rex,Jinggg,7378,https://www.vlr.gg/player/7378/jinggg,Wang Jing Jie,active,active,True,False,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
-Paper Rex,f0rsakeN,9801,https://www.vlr.gg/player/9801/f0rsaken,Jason Susanto,active,active,True,False,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
-Paper Rex,d4v41,9803,https://www.vlr.gg/player/9803/d4v41,Khalish Rusyaidee,active,active,True,False,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
-Paper Rex,something,17086,https://www.vlr.gg/player/17086/something,Ilya Petrov,active,active,True,False,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
-Paper Rex,Tommy,9799,https://www.vlr.gg/player/9799/tommy,Kumaresan Ramani,manager,manager,False,True,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
-Paper Rex,alecks,9804,https://www.vlr.gg/player/9804/alecks,Alexandre Sallé,coach,coach,False,True,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
-Paper Rex,Wendler,55829,https://www.vlr.gg/player/55829/wendler,Ashton Wendler,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
-Paper Rex,Panda,54678,https://www.vlr.gg/player/54678/panda,Laijhun Cheng,performance coach,performance coach,False,True,https://www.vlr.gg/team/624/paper-rex/,2026-07-09T17:47:15
+100 Thieves,vora,20140,https://www.vlr.gg/player/20140/vora,Jordan Pulwer,active,active,True,False,https://www.vlr.gg/team/120/100-thieves/,2026-07-12T10:23:44
+100 Thieves,Cryocells,4147,https://www.vlr.gg/player/4147/cryocells,Matthew Panganiban,active,active,True,False,https://www.vlr.gg/team/120/100-thieves/,2026-07-12T10:23:44
+100 Thieves,Asuna,601,https://www.vlr.gg/player/601/asuna,Peter Mazuryk,active,active,True,False,https://www.vlr.gg/team/120/100-thieves/,2026-07-12T10:23:44
+100 Thieves,Timotino,29893,https://www.vlr.gg/player/29893/timotino,Timothée Lavigne Dupont,active,active,True,False,https://www.vlr.gg/team/120/100-thieves/,2026-07-12T10:23:44
+100 Thieves,bang,3880,https://www.vlr.gg/player/3880/bang,Sean Bezerra,active,active,True,False,https://www.vlr.gg/team/120/100-thieves/,2026-07-12T10:23:44
+100 Thieves,Nbs,1622,https://www.vlr.gg/player/1622/nbs,Laurynas Kisielius,head coach,head coach,False,True,https://www.vlr.gg/team/120/100-thieves/,2026-07-12T10:23:44
+100 Thieves,d00mbr0s,452,https://www.vlr.gg/player/452/d00mbr0s,Carl Erik Victor William Sandgren,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/120/100-thieves/,2026-07-12T10:23:44
+All Gamers,Shr1mp,25494,https://www.vlr.gg/player/25494/shr1mp,Yang Yong (杨勇),active,active,True,False,https://www.vlr.gg/team/1119/all-gamers/,2026-07-12T10:23:45
+All Gamers,K1ra,46748,https://www.vlr.gg/player/46748/k1ra,Huang Zhihao (黄志豪),active,active,True,False,https://www.vlr.gg/team/1119/all-gamers/,2026-07-12T10:23:45
+All Gamers,Bai,52101,https://www.vlr.gg/player/52101/bai,Zhang Zeyang (张泽洋),active,active,True,False,https://www.vlr.gg/team/1119/all-gamers/,2026-07-12T10:23:45
+All Gamers,f4ngeer,21216,https://www.vlr.gg/player/21216/f4ngeer,Roman Smirnov,active,active,True,False,https://www.vlr.gg/team/1119/all-gamers/,2026-07-12T10:23:45
+All Gamers,iamgrq,58959,https://www.vlr.gg/player/58959/iamgrq,Gao Ruiqi (高锐琦),active,active,True,False,https://www.vlr.gg/team/1119/all-gamers/,2026-07-12T10:23:45
+All Gamers,AaRon0,56520,https://www.vlr.gg/player/56520/aaron0,Xu Maoxiao (徐茂蕭),manager,manager,False,True,https://www.vlr.gg/team/1119/all-gamers/,2026-07-12T10:23:45
+All Gamers,ED101,40619,https://www.vlr.gg/player/40619/ed101,Han Tianqi (韩天奇),head coach,head coach,False,True,https://www.vlr.gg/team/1119/all-gamers/,2026-07-12T10:23:45
+All Gamers,Master,50082,https://www.vlr.gg/player/50082/master,Cheng Zihan (程子晗),staff,staff,True,False,https://www.vlr.gg/team/1119/all-gamers/,2026-07-12T10:23:45
+BBL Esports,Crewen,12795,https://www.vlr.gg/player/12795/crewen,Ali Eren Sargin,active,active,True,False,https://www.vlr.gg/team/397/bbl-esports/,2026-07-12T10:23:46
+BBL Esports,Lar0k,31305,https://www.vlr.gg/player/31305/lar0k,Yusuf Kaan Kanber,active,active,True,False,https://www.vlr.gg/team/397/bbl-esports/,2026-07-12T10:23:46
+BBL Esports,Loita,24344,https://www.vlr.gg/player/24344/loita,Utku Kart,active,active,True,False,https://www.vlr.gg/team/397/bbl-esports/,2026-07-12T10:23:46
+BBL Esports,Rosé,5565,https://www.vlr.gg/player/5565/ros,Eren Erzan,active,active,True,False,https://www.vlr.gg/team/397/bbl-esports/,2026-07-12T10:23:46
+BBL Esports,lovers rock,40935,https://www.vlr.gg/player/40935/lovers-rock,Umut Pekdoğan,active,active,True,False,https://www.vlr.gg/team/397/bbl-esports/,2026-07-12T10:23:46
+BBL Esports,KEY,15042,https://www.vlr.gg/player/15042/key,Mert Çelebi,head coach,head coach,False,True,https://www.vlr.gg/team/397/bbl-esports/,2026-07-12T10:23:46
+BBL Esports,Viento,27333,https://www.vlr.gg/player/27333/viento,Göktuğ Alp Çebi,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/397/bbl-esports/,2026-07-12T10:23:46
+Bilibili Gaming,whzy,4885,https://www.vlr.gg/player/4885/whzy,Wang Haozhe (王昊哲),active,active,True,False,https://www.vlr.gg/team/12010/bilibili-gaming/,2026-07-12T10:23:48
+Bilibili Gaming,rushia,48878,https://www.vlr.gg/player/48878/rushia,Wang Xiaojie (王晓杰),active,active,True,False,https://www.vlr.gg/team/12010/bilibili-gaming/,2026-07-12T10:23:48
+Bilibili Gaming,nephh,10698,https://www.vlr.gg/player/10698/nephh,Marcus Tan,active,active,True,False,https://www.vlr.gg/team/12010/bilibili-gaming/,2026-07-12T10:23:48
+Bilibili Gaming,yilai,62947,https://www.vlr.gg/player/62947/yilai,Gu Yiming (顾依铭),active,active,True,False,https://www.vlr.gg/team/12010/bilibili-gaming/,2026-07-12T10:23:48
+Bilibili Gaming,Knight,4774,https://www.vlr.gg/player/4774/knight,Liu Yuxiang (刘宇翔),active,active,True,False,https://www.vlr.gg/team/12010/bilibili-gaming/,2026-07-12T10:23:48
+Bilibili Gaming,bud,56260,https://www.vlr.gg/player/56260/bud,Yang Renyu (杨韧余),active,active,True,False,https://www.vlr.gg/team/12010/bilibili-gaming/,2026-07-12T10:23:48
+Bilibili Gaming,FT,64029,https://www.vlr.gg/player/64029/ft,Yan Shuaibo (闫帅博),active,active,True,False,https://www.vlr.gg/team/12010/bilibili-gaming/,2026-07-12T10:23:48
+Bilibili Gaming,Levius,40845,https://www.vlr.gg/player/40845/levius,Lu Yinzhong (卢胤中),Inactive,inactive,False,False,https://www.vlr.gg/team/12010/bilibili-gaming/,2026-07-12T10:23:48
+Bilibili Gaming,Gandolf,53130,https://www.vlr.gg/player/53130/gandolf,Jiang Hao (蒋浩),manager,manager,False,True,https://www.vlr.gg/team/12010/bilibili-gaming/,2026-07-12T10:23:48
+Bilibili Gaming,Anaks,2331,https://www.vlr.gg/player/2331/anaks,Ye Sang-jun (예상준),head coach,head coach,False,True,https://www.vlr.gg/team/12010/bilibili-gaming/,2026-07-12T10:23:48
+Bilibili Gaming,YaoXie,59555,https://www.vlr.gg/player/59555/yaoxie,Zhang Jihang (張繼航),coach,coach,False,True,https://www.vlr.gg/team/12010/bilibili-gaming/,2026-07-12T10:23:48
+Bilibili Gaming,Jexen,39525,https://www.vlr.gg/player/39525/jexen,Wang Lin Xiao (王林骁),coach,coach,False,True,https://www.vlr.gg/team/12010/bilibili-gaming/,2026-07-12T10:23:48
+Bilibili Gaming,balax,51670,https://www.vlr.gg/player/51670/balax,Thong Chern Kwi,analyst,analyst,False,True,https://www.vlr.gg/team/12010/bilibili-gaming/,2026-07-12T10:23:48
+Bilibili Gaming,Rain,53129,https://www.vlr.gg/player/53129/rain,Deng Shiyao (邓诗耀),staff,staff,True,False,https://www.vlr.gg/team/12010/bilibili-gaming/,2026-07-12T10:23:48
+Cloud9,FireBallOps,10053,https://www.vlr.gg/player/10053/fireballops,Cameron Tomaselli,active,active,True,False,https://www.vlr.gg/team/188/cloud9/,2026-07-12T10:23:49
+Cloud9,Zellsis,729,https://www.vlr.gg/player/729/zellsis,Jordan Montemurro,active,active,True,False,https://www.vlr.gg/team/188/cloud9/,2026-07-12T10:23:49
+Cloud9,Jackk,44842,https://www.vlr.gg/player/44842/jackk,Jack Foote,active,active,True,False,https://www.vlr.gg/team/188/cloud9/,2026-07-12T10:23:49
+Cloud9,OXY,18796,https://www.vlr.gg/player/18796/oxy,Francis Hoang,active,active,True,False,https://www.vlr.gg/team/188/cloud9/,2026-07-12T10:23:49
+Cloud9,v1c,17433,https://www.vlr.gg/player/17433/v1c,Victor Truong,active,active,True,False,https://www.vlr.gg/team/188/cloud9/,2026-07-12T10:23:49
+Cloud9,Immi,9815,https://www.vlr.gg/player/9815/immi,Ian Harding,coach,coach,False,True,https://www.vlr.gg/team/188/cloud9/,2026-07-12T10:23:49
+Cloud9,Veer,3877,https://www.vlr.gg/player/3877/veer,Wyatt Blevins,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/188/cloud9/,2026-07-12T10:23:49
+DRX,MaKo,4462,https://www.vlr.gg/player/4462/mako,Kim Myeong-gwan (김명관),active,active,True,False,https://www.vlr.gg/team/8185/kiwoom-drx/,2026-07-12T10:23:51
+DRX,yong,51238,https://www.vlr.gg/player/51238/yong,Kim Ho-yong (김호용),active,active,True,False,https://www.vlr.gg/team/8185/kiwoom-drx/,2026-07-12T10:23:51
+DRX,free1ng,1916,https://www.vlr.gg/player/1916/free1ng,No Ha-jun (노하준),active,active,True,False,https://www.vlr.gg/team/8185/kiwoom-drx/,2026-07-12T10:23:51
+DRX,HYUNMIN,28400,https://www.vlr.gg/player/28400/hyunmin,Song Hyun-min (송현민),active,active,True,False,https://www.vlr.gg/team/8185/kiwoom-drx/,2026-07-12T10:23:51
+DRX,BeYN,4678,https://www.vlr.gg/player/4678/beyn,Kang Ha-bin (강하빈),active,active,True,False,https://www.vlr.gg/team/8185/kiwoom-drx/,2026-07-12T10:23:51
+DRX,Flicker,51100,https://www.vlr.gg/player/51100/flicker,Kim Tae-hee (김태희),Inactive,inactive,False,False,https://www.vlr.gg/team/8185/kiwoom-drx/,2026-07-12T10:23:51
+DRX,termi,775,https://www.vlr.gg/player/775/termi,Pyeon Seon-ho (편선호),head coach,head coach,False,True,https://www.vlr.gg/team/8185/kiwoom-drx/,2026-07-12T10:23:51
+DRX,glow,770,https://www.vlr.gg/player/770/glow,Kim Min-soo (김민수),coach,coach,False,True,https://www.vlr.gg/team/8185/kiwoom-drx/,2026-07-12T10:23:51
+DRX,Argency,776,https://www.vlr.gg/player/776/argency,Kwon Soon-woo (권순우),coach,coach,False,True,https://www.vlr.gg/team/8185/kiwoom-drx/,2026-07-12T10:23:51
+DetonatioN FocusMe,Meiy,6672,https://www.vlr.gg/player/6672/meiy,Ibuki Seki,active,active,True,False,https://www.vlr.gg/team/278/detonation-focusme/,2026-07-12T10:23:52
+DetonatioN FocusMe,SSeeS,21438,https://www.vlr.gg/player/21438/ssees,Tomonori Okimura,active,active,True,False,https://www.vlr.gg/team/278/detonation-focusme/,2026-07-12T10:23:52
+DetonatioN FocusMe,yatsuka,29843,https://www.vlr.gg/player/29843/yatsuka,Kazuya Ikeda,active,active,True,False,https://www.vlr.gg/team/278/detonation-focusme/,2026-07-12T10:23:52
+DetonatioN FocusMe,Caedye,29841,https://www.vlr.gg/player/29841/caedye,Amon Mateus Okakura,active,active,True,False,https://www.vlr.gg/team/278/detonation-focusme/,2026-07-12T10:23:52
+DetonatioN FocusMe,Akame,13002,https://www.vlr.gg/player/13002/akame,Yu Gwang-hui (유광희),active,active,True,False,https://www.vlr.gg/team/278/detonation-focusme/,2026-07-12T10:23:52
+DetonatioN FocusMe,Vorz,19725,https://www.vlr.gg/player/19725/vorz,Kakeru Ikarashi,head coach,head coach,False,True,https://www.vlr.gg/team/278/detonation-focusme/,2026-07-12T10:23:52
+DetonatioN FocusMe,Melofovia,21437,https://www.vlr.gg/player/21437/melofovia,Hirotaka Okazaki,coach,coach,False,True,https://www.vlr.gg/team/278/detonation-focusme/,2026-07-12T10:23:52
+DetonatioN FocusMe,NorthernLights,27974,https://www.vlr.gg/player/27974/northernlights,Tsubasa Ando,coach,coach,False,True,https://www.vlr.gg/team/278/detonation-focusme/,2026-07-12T10:23:52
+Dragon Ranger Gaming,Nicc,11524,https://www.vlr.gg/player/11524/nicc,Shao Yi-qun (邵逸群),active,active,True,False,https://www.vlr.gg/team/11981/dragon-ranger-gaming/,2026-07-12T10:23:54
+Dragon Ranger Gaming,Flex1n,4705,https://www.vlr.gg/player/4705/flex1n,Lo Rui (罗瑞),active,active,True,False,https://www.vlr.gg/team/11981/dragon-ranger-gaming/,2026-07-12T10:23:54
+Dragon Ranger Gaming,Life,3028,https://www.vlr.gg/player/3028/life,Qu Donghao (瞿东豪),active,active,True,False,https://www.vlr.gg/team/11981/dragon-ranger-gaming/,2026-07-12T10:23:54
+Dragon Ranger Gaming,vo0kashu,3741,https://www.vlr.gg/player/3741/vo0kashu,Ilya Ushakov,active,active,True,False,https://www.vlr.gg/team/11981/dragon-ranger-gaming/,2026-07-12T10:23:54
+Dragon Ranger Gaming,Verse,55817,https://www.vlr.gg/player/55817/verse,Zhou Zijun (周子钧),active,active,True,False,https://www.vlr.gg/team/11981/dragon-ranger-gaming/,2026-07-12T10:23:54
+Dragon Ranger Gaming,SpiritZ1,31753,https://www.vlr.gg/player/31753/spiritz1,Lin Dingyu (林定宇),active,active,True,False,https://www.vlr.gg/team/11981/dragon-ranger-gaming/,2026-07-12T10:23:54
+Dragon Ranger Gaming,NaThanD,3532,https://www.vlr.gg/player/3532/nathand,Deng Senqiao (邓森侨),head coach,head coach,False,True,https://www.vlr.gg/team/11981/dragon-ranger-gaming/,2026-07-12T10:23:54
+Dragon Ranger Gaming,1t,38519,https://www.vlr.gg/player/38519/1t,Huang Biaohong (黄彪宏),assistant coach,assistant coach,False,True,https://www.vlr.gg/team/11981/dragon-ranger-gaming/,2026-07-12T10:23:54
+Dragon Ranger Gaming,Alti,25716,https://www.vlr.gg/player/25716/alti,,performance coach,performance coach,False,True,https://www.vlr.gg/team/11981/dragon-ranger-gaming/,2026-07-12T10:23:54
+Dragon Ranger Gaming,Melon,66045,https://www.vlr.gg/player/66045/melon,,analyst,analyst,False,True,https://www.vlr.gg/team/11981/dragon-ranger-gaming/,2026-07-12T10:23:54
+ENVY,Eggsterr,35302,https://www.vlr.gg/player/35302/eggsterr,Evan Grady,active,active,True,False,https://www.vlr.gg/team/427/envy/,2026-07-12T10:23:55
+ENVY,Demon1,26171,https://www.vlr.gg/player/26171/demon1,Max Mazanov,active,active,True,False,https://www.vlr.gg/team/427/envy/,2026-07-12T10:23:55
+ENVY,Rossy,1129,https://www.vlr.gg/player/1129/rossy,Daniel Abedrabbo,active,active,True,False,https://www.vlr.gg/team/427/envy/,2026-07-12T10:23:55
+ENVY,keznit,2462,https://www.vlr.gg/player/2462/keznit,Angelo Mori,active,active,True,False,https://www.vlr.gg/team/427/envy/,2026-07-12T10:23:55
+ENVY,GLYPH,8286,https://www.vlr.gg/player/8286/glyph,Conner Garcia,active,active,True,False,https://www.vlr.gg/team/427/envy/,2026-07-12T10:23:55
+ENVY,ion,29547,https://www.vlr.gg/player/29547/ion,Ayan Rastogi,Inactive,inactive,False,False,https://www.vlr.gg/team/427/envy/,2026-07-12T10:23:55
+ENVY,P0PPIN,21778,https://www.vlr.gg/player/21778/p0ppin,Matteo Weber,Inactive,inactive,False,False,https://www.vlr.gg/team/427/envy/,2026-07-12T10:23:55
+ENVY,Stunner,13109,https://www.vlr.gg/player/13109/stunner,Dakota MacLeod,head coach,head coach,False,True,https://www.vlr.gg/team/427/envy/,2026-07-12T10:23:55
+ENVY,WKN,1296,https://www.vlr.gg/player/1296/wkn,Alvaro Bustos,coach,coach,False,True,https://www.vlr.gg/team/427/envy/,2026-07-12T10:23:55
+Edward Gaming,nobody,3017,https://www.vlr.gg/player/3017/nobody,Wang Senxu (王森旭),active,active,True,False,https://www.vlr.gg/team/1120/edward-gaming/,2026-07-12T10:23:56
+Edward Gaming,ZmjjKK,3520,https://www.vlr.gg/player/3520/zmjjkk,Zheng Yongkang (郑永康),active,active,True,False,https://www.vlr.gg/team/1120/edward-gaming/,2026-07-12T10:23:56
+Edward Gaming,CHICHOO,15559,https://www.vlr.gg/player/15559/chichoo,Wan Shunzhi (万顺治),active,active,True,False,https://www.vlr.gg/team/1120/edward-gaming/,2026-07-12T10:23:56
+Edward Gaming,Smoggy,4742,https://www.vlr.gg/player/4742/smoggy,Zhang Zhao (张钊),active,active,True,False,https://www.vlr.gg/team/1120/edward-gaming/,2026-07-12T10:23:56
+Edward Gaming,Jieni7,51244,https://www.vlr.gg/player/51244/jieni7,Zhang Juntai (张君泰),active,active,True,False,https://www.vlr.gg/team/1120/edward-gaming/,2026-07-12T10:23:56
+Edward Gaming,zjc,7135,https://www.vlr.gg/player/7135/zjc,Zhang Juncheng (张峻程),Sub,sub,True,False,https://www.vlr.gg/team/1120/edward-gaming/,2026-07-12T10:23:56
+Edward Gaming,Hibari,59434,https://www.vlr.gg/player/59434/hibari,Jin Xingyu (金星宇),manager,manager,False,True,https://www.vlr.gg/team/1120/edward-gaming/,2026-07-12T10:23:56
+Edward Gaming,Autumn,2504,https://www.vlr.gg/player/2504/autumn,Yoon Eu-teum (윤으뜸),head coach,head coach,False,True,https://www.vlr.gg/team/1120/edward-gaming/,2026-07-12T10:23:56
+Edward Gaming,Indigo,44793,https://www.vlr.gg/player/44793/indigo,Seol Do-hoon (설도훈),coach,coach,False,True,https://www.vlr.gg/team/1120/edward-gaming/,2026-07-12T10:23:56
+Edward Gaming,signed,1175,https://www.vlr.gg/player/1175/signed,Dale Tang,coach,coach,False,True,https://www.vlr.gg/team/1120/edward-gaming/,2026-07-12T10:23:56
+Eternal Fire,nekky,12670,https://www.vlr.gg/player/12670/nekky,Anıl Dağdeviren,active,active,True,False,https://www.vlr.gg/team/6392/eternal-fire/,2026-07-12T10:23:58
+Eternal Fire,Izzy,10160,https://www.vlr.gg/player/10160/izzy,Baran Yılmaz,active,active,True,False,https://www.vlr.gg/team/6392/eternal-fire/,2026-07-12T10:23:58
+Eternal Fire,audaz,40843,https://www.vlr.gg/player/40843/audaz,Soner Ekiz,active,active,True,False,https://www.vlr.gg/team/6392/eternal-fire/,2026-07-12T10:23:58
+Eternal Fire,Favian,41720,https://www.vlr.gg/player/41720/favian,Enes Yiğiter,active,active,True,False,https://www.vlr.gg/team/6392/eternal-fire/,2026-07-12T10:23:58
+Eternal Fire,echo,49346,https://www.vlr.gg/player/49346/echo,Ömür Serkan Şenol,active,active,True,False,https://www.vlr.gg/team/6392/eternal-fire/,2026-07-12T10:23:58
+Eternal Fire,afr0nfire,4891,https://www.vlr.gg/player/4891/afr0nfire,Hakan Pınarbaşı,head coach,head coach,False,True,https://www.vlr.gg/team/6392/eternal-fire/,2026-07-12T10:23:58
+Eternal Fire,L7,4890,https://www.vlr.gg/player/4890/l7,Emirhan Şahintürk,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/6392/eternal-fire/,2026-07-12T10:23:58
+Eternal Fire,casteLL0,29002,https://www.vlr.gg/player/29002/castell0,Hazım Orhun Dalbeyler,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/6392/eternal-fire/,2026-07-12T10:23:58
+Evil Geniuses,supamen,826,https://www.vlr.gg/player/826/supamen,Phat Le,active,active,True,False,https://www.vlr.gg/team/5248/evil-geniuses/,2026-07-12T10:23:59
+Evil Geniuses,bao,34400,https://www.vlr.gg/player/34400/bao,Bao Nguyen,active,active,True,False,https://www.vlr.gg/team/5248/evil-geniuses/,2026-07-12T10:23:59
+Evil Geniuses,dgzin,8873,https://www.vlr.gg/player/8873/dgzin,Douglas Silva,active,active,True,False,https://www.vlr.gg/team/5248/evil-geniuses/,2026-07-12T10:23:59
+Evil Geniuses,Paincakes,2164,https://www.vlr.gg/player/2164/paincakes,Jake Hass,active,active,True,False,https://www.vlr.gg/team/5248/evil-geniuses/,2026-07-12T10:23:59
+Evil Geniuses,zerona,14048,https://www.vlr.gg/player/14048/zerona,Javan Varela,active,active,True,False,https://www.vlr.gg/team/5248/evil-geniuses/,2026-07-12T10:23:59
+Evil Geniuses,pho,761,https://www.vlr.gg/player/761/pho,Mike Panza,manager,manager,False,True,https://www.vlr.gg/team/5248/evil-geniuses/,2026-07-12T10:23:59
+Evil Geniuses,potter,3104,https://www.vlr.gg/player/3104/potter,Christine Chi,head coach,head coach,False,True,https://www.vlr.gg/team/5248/evil-geniuses/,2026-07-12T10:23:59
+Evil Geniuses,Faded,41776,https://www.vlr.gg/player/41776/faded,Daniel Hwang,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/5248/evil-geniuses/,2026-07-12T10:23:59
+Evil Geniuses,meco1e,48983,https://www.vlr.gg/player/48983/meco1e,Cole Lewis,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/5248/evil-geniuses/,2026-07-12T10:23:59
+FULL SENSE,Killua,13784,https://www.vlr.gg/player/13784/killua,Tanate Teerasawad,active,active,True,False,https://www.vlr.gg/team/4050/full-sense/,2026-07-12T10:24:01
+FULL SENSE,primmie,25255,https://www.vlr.gg/player/25255/primmie,Papaphat Sriprapha,active,active,True,False,https://www.vlr.gg/team/4050/full-sense/,2026-07-12T10:24:01
+FULL SENSE,JitBoyS,13788,https://www.vlr.gg/player/13788/jitboys,Jittana Nokngam,active,active,True,False,https://www.vlr.gg/team/4050/full-sense/,2026-07-12T10:24:01
+FULL SENSE,seph1roth,27244,https://www.vlr.gg/player/27244/seph1roth,Chinnakrit Phoojaroen,active,active,True,False,https://www.vlr.gg/team/4050/full-sense/,2026-07-12T10:24:01
+FULL SENSE,Crws,3977,https://www.vlr.gg/player/3977/crws,Thanamethk Mahatthananuyut,active,active,True,False,https://www.vlr.gg/team/4050/full-sense/,2026-07-12T10:24:01
+FULL SENSE,thyy,42901,https://www.vlr.gg/player/42901/thyy,Anupong Preamsak,Inactive,inactive,False,False,https://www.vlr.gg/team/4050/full-sense/,2026-07-12T10:24:01
+FULL SENSE,Leviathan,27254,https://www.vlr.gg/player/27254/leviathan,Thanyathon Nakmee,Inactive,inactive,False,False,https://www.vlr.gg/team/4050/full-sense/,2026-07-12T10:24:01
+FULL SENSE,FrosT,8707,https://www.vlr.gg/player/8707/frost,Hector Rosario,head coach,head coach,False,True,https://www.vlr.gg/team/4050/full-sense/,2026-07-12T10:24:01
+FULL SENSE,THEELOVEFAMILY,2388,https://www.vlr.gg/player/2388/theelovefamily,Thanaphat Limpaphan,coach,coach,False,True,https://www.vlr.gg/team/4050/full-sense/,2026-07-12T10:24:01
+FULL SENSE,Sushiboys,3342,https://www.vlr.gg/player/3342/sushiboys,Panyawat Subsiriroj,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/4050/full-sense/,2026-07-12T10:24:01
+FURIA,artzin,5957,https://www.vlr.gg/player/5957/artzin,Arthur Araujo,active,active,True,False,https://www.vlr.gg/team/2406/furia/,2026-07-12T10:24:02
+FURIA,basic,37354,https://www.vlr.gg/player/37354/basic,Luis Henrique Ferlin Tessaro,active,active,True,False,https://www.vlr.gg/team/2406/furia/,2026-07-12T10:24:02
+FURIA,Shyy,24007,https://www.vlr.gg/player/24007/shyy,Fabian Usnayo,active,active,True,False,https://www.vlr.gg/team/2406/furia/,2026-07-12T10:24:02
+FURIA,eeiu,796,https://www.vlr.gg/player/796/eeiu,Daniel Vucenovic,active,active,True,False,https://www.vlr.gg/team/2406/furia/,2026-07-12T10:24:02
+FURIA,koalanoob,3722,https://www.vlr.gg/player/3722/koalanoob,Gianfranco Potestio,active,active,True,False,https://www.vlr.gg/team/2406/furia/,2026-07-12T10:24:02
+FURIA,shaW,19156,https://www.vlr.gg/player/19156/shaw,Ian Jardim,head coach,head coach,False,True,https://www.vlr.gg/team/2406/furia/,2026-07-12T10:24:02
+FURIA,Kamino,18932,https://www.vlr.gg/player/18932/kamino,Lucas Kamino,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/2406/furia/,2026-07-12T10:24:02
+FUT Esports,s0pp,39357,https://www.vlr.gg/player/39357/s0pp,Efe Tur,active,active,True,False,https://www.vlr.gg/team/1184/fut-esports/,2026-07-12T10:24:04
+FUT Esports,xeus,12793,https://www.vlr.gg/player/12793/xeus,Doğan Gözgen,active,active,True,False,https://www.vlr.gg/team/1184/fut-esports/,2026-07-12T10:24:04
+FUT Esports,yetujey,8369,https://www.vlr.gg/player/8369/yetujey,Eray Budak,active,active,True,False,https://www.vlr.gg/team/1184/fut-esports/,2026-07-12T10:24:04
+FUT Esports,KROSTALY,15735,https://www.vlr.gg/player/15735/krostaly,Okan Alaçam,active,active,True,False,https://www.vlr.gg/team/1184/fut-esports/,2026-07-12T10:24:04
+FUT Esports,sociablEE,5568,https://www.vlr.gg/player/5568/sociablee,Volkan Yonal,active,active,True,False,https://www.vlr.gg/team/1184/fut-esports/,2026-07-12T10:24:04
+FUT Esports,baha,10114,https://www.vlr.gg/player/10114/baha,Baha Gözmen,Inactive,inactive,False,False,https://www.vlr.gg/team/1184/fut-esports/,2026-07-12T10:24:04
+FUT Esports,AtaKaptan,6510,https://www.vlr.gg/player/6510/atakaptan,Ata Tan,Inactive,inactive,False,False,https://www.vlr.gg/team/1184/fut-esports/,2026-07-12T10:24:04
+FUT Esports,qRaxs,1139,https://www.vlr.gg/player/1139/qraxs,Doğukan Balaban,Inactive,inactive,False,False,https://www.vlr.gg/team/1184/fut-esports/,2026-07-12T10:24:04
+FUT Esports,MrFaliN,8044,https://www.vlr.gg/player/8044/mrfalin,Furkan Yeğen,Inactive,inactive,False,False,https://www.vlr.gg/team/1184/fut-esports/,2026-07-12T10:24:04
+FUT Esports,Mighty,61439,https://www.vlr.gg/player/61439/mighty,Berkalp Kaan Yılmazoğlu,manager,manager,False,True,https://www.vlr.gg/team/1184/fut-esports/,2026-07-12T10:24:04
+FUT Esports,Vlad,19814,https://www.vlr.gg/player/19814/vlad,Berke Kantürk,head coach,head coach,False,True,https://www.vlr.gg/team/1184/fut-esports/,2026-07-12T10:24:04
+FUT Esports,Bambino,14222,https://www.vlr.gg/player/14222/bambino,Tyler Jay,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/1184/fut-esports/,2026-07-12T10:24:04
+Fnatic,Boaster,438,https://www.vlr.gg/player/438/boaster,Jake Howlett,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-12T10:24:05
+Fnatic,crashies,4,https://www.vlr.gg/player/4/crashies,Austin Roberts,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-12T10:24:05
+Fnatic,kaajak,9554,https://www.vlr.gg/player/9554/kaajak,Kajetan Haremski,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-12T10:24:05
+Fnatic,Veqaj,12928,https://www.vlr.gg/player/12928/veqaj,Sylvain Pattyn,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-12T10:24:05
+Fnatic,Cloud,4181,https://www.vlr.gg/player/4181/cloud,Kirill Nehozhin,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-12T10:24:05
+Fnatic,Alfajer,9810,https://www.vlr.gg/player/9810/alfajer,Emir Ali Beder,active,active,True,False,https://www.vlr.gg/team/2593/fnatic/,2026-07-12T10:24:05
+Fnatic,CoJo,18972,https://www.vlr.gg/player/18972/cojo,Colin Johnson,manager,manager,False,True,https://www.vlr.gg/team/2593/fnatic/,2026-07-12T10:24:05
+Fnatic,ENGH,460,https://www.vlr.gg/player/460/engh,Andrey Sholokhov,head coach,head coach,False,True,https://www.vlr.gg/team/2593/fnatic/,2026-07-12T10:24:05
+Fnatic,Desmo,195,https://www.vlr.gg/player/195/desmo,Casper Rasmussen,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/2593/fnatic/,2026-07-12T10:24:05
+Fnatic,Szed,53027,https://www.vlr.gg/player/53027/szed,Philipp Schickor,performance coach,performance coach,False,True,https://www.vlr.gg/team/2593/fnatic/,2026-07-12T10:24:05
+Fnatic,Milan,4010,https://www.vlr.gg/player/4010/milan,Milan de Meij,head coach,head coach,False,True,https://www.vlr.gg/team/2593/fnatic/,2026-07-12T10:24:05
+FunPlus Phoenix,AAAAY,19530,https://www.vlr.gg/player/19530/aaaay,Zhang Yang (张杨),active,active,True,False,https://www.vlr.gg/team/11328/funplus-phoenix/,2026-07-12T10:24:06
+FunPlus Phoenix,KovaQ,7987,https://www.vlr.gg/player/7987/kovaq,Blendi Kovaci,active,active,True,False,https://www.vlr.gg/team/11328/funplus-phoenix/,2026-07-12T10:24:06
+FunPlus Phoenix,coconut,12365,https://www.vlr.gg/player/12365/coconut,Colin Patrick Chung (钟弘祖),active,active,True,False,https://www.vlr.gg/team/11328/funplus-phoenix/,2026-07-12T10:24:06
+FunPlus Phoenix,Xlele,54487,https://www.vlr.gg/player/54487/xlele,Zhao Yanbo (赵炎博),active,active,True,False,https://www.vlr.gg/team/11328/funplus-phoenix/,2026-07-12T10:24:06
+FunPlus Phoenix,Setrod,50025,https://www.vlr.gg/player/50025/setrod,Ou Taigeng (欧泰赓),active,active,True,False,https://www.vlr.gg/team/11328/funplus-phoenix/,2026-07-12T10:24:06
+FunPlus Phoenix,9hr,34676,https://www.vlr.gg/player/34676/9hr,Guan Haoran (管豪然),manager,manager,False,True,https://www.vlr.gg/team/11328/funplus-phoenix/,2026-07-12T10:24:06
+FunPlus Phoenix,LEGIJA,22782,https://www.vlr.gg/player/22782/legija,Nikola Ninić,head coach,head coach,False,True,https://www.vlr.gg/team/11328/funplus-phoenix/,2026-07-12T10:24:06
+FunPlus Phoenix,York,6021,https://www.vlr.gg/player/6021/york,Yao Kun (姚堃),assistant coach,assistant coach,False,True,https://www.vlr.gg/team/11328/funplus-phoenix/,2026-07-12T10:24:06
+FunPlus Phoenix,PHO,50169,https://www.vlr.gg/player/50169/pho,Zhang Shicheng (张世成),staff,staff,True,False,https://www.vlr.gg/team/11328/funplus-phoenix/,2026-07-12T10:24:06
+G2 Esports,valyn,3885,https://www.vlr.gg/player/3885/valyn,Jacob Batio,active,active,True,False,https://www.vlr.gg/team/11058/g2-esports/,2026-07-12T10:24:08
+G2 Esports,jawgemo,3993,https://www.vlr.gg/player/3993/jawgemo,Alexander Mor,active,active,True,False,https://www.vlr.gg/team/11058/g2-esports/,2026-07-12T10:24:08
+G2 Esports,BABYBAY,2170,https://www.vlr.gg/player/2170/babybay,Andrej Francisty,active,active,True,False,https://www.vlr.gg/team/11058/g2-esports/,2026-07-12T10:24:08
+G2 Esports,trent,15500,https://www.vlr.gg/player/15500/trent,Trent Cairns,active,active,True,False,https://www.vlr.gg/team/11058/g2-esports/,2026-07-12T10:24:08
+G2 Esports,leaf,7873,https://www.vlr.gg/player/7873/leaf,Nathan Orf,active,active,True,False,https://www.vlr.gg/team/11058/g2-esports/,2026-07-12T10:24:08
+G2 Esports,Ambrose,63508,https://www.vlr.gg/player/63508/ambrose,Ambrose Lai,manager,manager,False,True,https://www.vlr.gg/team/11058/g2-esports/,2026-07-12T10:24:08
+G2 Esports,JoshRT,52,https://www.vlr.gg/player/52/joshrt,Josh Lee,head coach,head coach,False,True,https://www.vlr.gg/team/11058/g2-esports/,2026-07-12T10:24:08
+G2 Esports,shhhack,6899,https://www.vlr.gg/player/6899/shhhack,Peter Belej,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/11058/g2-esports/,2026-07-12T10:24:08
+G2 Esports,Robert,61050,https://www.vlr.gg/player/61050/robert,Robert Yip,performance coach,performance coach,False,True,https://www.vlr.gg/team/11058/g2-esports/,2026-07-12T10:24:08
+GIANTX,westside,34684,https://www.vlr.gg/player/34684/westside,Miłosz Duda,active,active,True,False,https://www.vlr.gg/team/14419/giantx/,2026-07-12T10:24:09
+GIANTX,Flickless,6959,https://www.vlr.gg/player/6959/flickless,Karel Maeckelbergh,active,active,True,False,https://www.vlr.gg/team/14419/giantx/,2026-07-12T10:24:09
+GIANTX,ara,11332,https://www.vlr.gg/player/11332/ara,Hanceriuc Eduard-George,active,active,True,False,https://www.vlr.gg/team/14419/giantx/,2026-07-12T10:24:09
+GIANTX,neT,6582,https://www.vlr.gg/player/6582/net,Michael Bernet,active,active,True,False,https://www.vlr.gg/team/14419/giantx/,2026-07-12T10:24:09
+GIANTX,tomaszy,19691,https://www.vlr.gg/player/19691/tomaszy,Tomás Machado,Inactive,inactive,False,False,https://www.vlr.gg/team/14419/giantx/,2026-07-12T10:24:09
+GIANTX,Hehnal,42506,https://www.vlr.gg/player/42506/hehnal,Alexandra Hehn,manager,manager,False,True,https://www.vlr.gg/team/14419/giantx/,2026-07-12T10:24:09
+GIANTX,pipsoN,319,https://www.vlr.gg/player/319/pipson,Daniil Mesheryakov,head coach,head coach,False,True,https://www.vlr.gg/team/14419/giantx/,2026-07-12T10:24:09
+GIANTX,wayLander,8813,https://www.vlr.gg/player/8813/waylander,Jan Rahkonen,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/14419/giantx/,2026-07-12T10:24:09
+GIANTX,Mew,50164,https://www.vlr.gg/player/50164/mew,Théo Ponzoni,performance coach,performance coach,False,True,https://www.vlr.gg/team/14419/giantx/,2026-07-12T10:24:09
+Gen.G,Ash,25017,https://www.vlr.gg/player/25017/ash,Ha Hyun-cheol (하현철),active,active,True,False,https://www.vlr.gg/team/17/gen-g/,2026-07-12T10:24:10
+Gen.G,Karon,34974,https://www.vlr.gg/player/34974/karon,Kim Won-tae (김원태),active,active,True,False,https://www.vlr.gg/team/17/gen-g/,2026-07-12T10:24:10
+Gen.G,t3xture,9196,https://www.vlr.gg/player/9196/t3xture,Kim Na-ra (김나라),active,active,True,False,https://www.vlr.gg/team/17/gen-g/,2026-07-12T10:24:10
+Gen.G,Efina,985,https://www.vlr.gg/player/985/efina,Kim Nak-yeon (김낙연),active,active,True,False,https://www.vlr.gg/team/17/gen-g/,2026-07-12T10:24:10
+Gen.G,Raxcal,48925,https://www.vlr.gg/player/48925/raxcal,Kim Min-seok (김민석),active,active,True,False,https://www.vlr.gg/team/17/gen-g/,2026-07-12T10:24:10
+Gen.G,Xiesta,62291,https://www.vlr.gg/player/62291/xiesta,Jung Si-hwan (정시환),Inactive,inactive,False,False,https://www.vlr.gg/team/17/gen-g/,2026-07-12T10:24:10
+Gen.G,ZynX,51099,https://www.vlr.gg/player/51099/zynx,Kim Dong-ha (김동하),Inactive,inactive,False,False,https://www.vlr.gg/team/17/gen-g/,2026-07-12T10:24:10
+Gen.G,solo,4562,https://www.vlr.gg/player/4562/solo,Kang Geun-chul (강근철),head coach,head coach,False,True,https://www.vlr.gg/team/17/gen-g/,2026-07-12T10:24:10
+Gen.G,HSK,21792,https://www.vlr.gg/player/21792/hsk,Kim Hae-seong (김해성),coach,coach,False,True,https://www.vlr.gg/team/17/gen-g/,2026-07-12T10:24:10
+Gen.G,peri,4560,https://www.vlr.gg/player/4560/peri,Jung Bum-ki (정범기),coach,coach,False,True,https://www.vlr.gg/team/17/gen-g/,2026-07-12T10:24:10
+Gentle Mates,starxo,565,https://www.vlr.gg/player/565/starxo,Patryk Kopczynski,active,active,True,False,https://www.vlr.gg/team/12694/gentle-mates/,2026-07-12T10:24:12
+Gentle Mates,Proxh,45494,https://www.vlr.gg/player/45494/proxh,Yusuf Emre Tunc,active,active,True,False,https://www.vlr.gg/team/12694/gentle-mates/,2026-07-12T10:24:12
+Gentle Mates,bipo,18400,https://www.vlr.gg/player/18400/bipo,Taranvir Singh,active,active,True,False,https://www.vlr.gg/team/12694/gentle-mates/,2026-07-12T10:24:12
+Gentle Mates,marteen,10307,https://www.vlr.gg/player/10307/marteen,Martin Pátek,active,active,True,False,https://www.vlr.gg/team/12694/gentle-mates/,2026-07-12T10:24:12
+Gentle Mates,Minny,23169,https://www.vlr.gg/player/23169/minny,Patrik Hušek,active,active,True,False,https://www.vlr.gg/team/12694/gentle-mates/,2026-07-12T10:24:12
+Gentle Mates,ManyFender,60065,https://www.vlr.gg/player/60065/manyfender,Marc Kowolik,manager,manager,False,True,https://www.vlr.gg/team/12694/gentle-mates/,2026-07-12T10:24:12
+Gentle Mates,KUNDIKUNDI,1363,https://www.vlr.gg/player/1363/kundikundi,Jiri Honkala,head coach,head coach,False,True,https://www.vlr.gg/team/12694/gentle-mates/,2026-07-12T10:24:12
+Gentle Mates,Mavera,557,https://www.vlr.gg/player/557/mavera,Erim Sasal,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/12694/gentle-mates/,2026-07-12T10:24:12
+Gentle Mates,Luinwess,59305,https://www.vlr.gg/player/59305/luinwess,Sinan Koyuncu,staff,staff,True,False,https://www.vlr.gg/team/12694/gentle-mates/,2026-07-12T10:24:12
+Global Esports,PatMen,13744,https://www.vlr.gg/player/13744/patmen,Patrick Mendoza,active,active,True,False,https://www.vlr.gg/team/918/global-esports/,2026-07-12T10:24:13
+Global Esports,UdoTan,4428,https://www.vlr.gg/player/4428/udotan,Go Kyung-won (고경원),active,active,True,False,https://www.vlr.gg/team/918/global-esports/,2026-07-12T10:24:13
+Global Esports,Kr1stal,5796,https://www.vlr.gg/player/5796/kr1stal,Savva Fedorov,active,active,True,False,https://www.vlr.gg/team/918/global-esports/,2026-07-12T10:24:13
+Global Esports,xavi8k,7754,https://www.vlr.gg/player/7754/xavi8k,Xavier Juan,active,active,True,False,https://www.vlr.gg/team/918/global-esports/,2026-07-12T10:24:13
+Global Esports,Autumn,872,https://www.vlr.gg/player/872/autumn,Kale Dunne,active,active,True,False,https://www.vlr.gg/team/918/global-esports/,2026-07-12T10:24:13
+Global Esports,Vatsal,4032,https://www.vlr.gg/player/4032/vatsal,Vatsal Uniyal,manager,manager,False,True,https://www.vlr.gg/team/918/global-esports/,2026-07-12T10:24:13
+Global Esports,Platoon,54685,https://www.vlr.gg/player/54685/platoon,Daniel Zhou,head coach,head coach,False,True,https://www.vlr.gg/team/918/global-esports/,2026-07-12T10:24:13
+Global Esports,vladk0r,13652,https://www.vlr.gg/player/13652/vladk0r,Vladimir Kornev,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/918/global-esports/,2026-07-12T10:24:13
+Global Esports,taeri,38838,https://www.vlr.gg/player/38838/taeri,Hose Son (손호세),staff,staff,True,False,https://www.vlr.gg/team/918/global-esports/,2026-07-12T10:24:13
+Global Esports,UnknowN,54686,https://www.vlr.gg/player/54686/unknown,Minseong Kim,staff,staff,True,False,https://www.vlr.gg/team/918/global-esports/,2026-07-12T10:24:13
+JD Gaming,jkuro,3519,https://www.vlr.gg/player/3519/jkuro,Yong Haochong (杨浩聪),active,active,True,False,https://www.vlr.gg/team/13576/jdg-esports/,2026-07-12T10:24:15
+JD Gaming,zhe,49476,https://www.vlr.gg/player/49476/zhe,Niu Zhe (牛哲),active,active,True,False,https://www.vlr.gg/team/13576/jdg-esports/,2026-07-12T10:24:15
+JD Gaming,Yuicaw,11218,https://www.vlr.gg/player/11218/yuicaw,Huang Yung-chieh (黃湧傑),active,active,True,False,https://www.vlr.gg/team/13576/jdg-esports/,2026-07-12T10:24:15
+JD Gaming,crownfisher,64969,https://www.vlr.gg/player/64969/crownfisher,Li Ao (李翱),active,active,True,False,https://www.vlr.gg/team/13576/jdg-esports/,2026-07-12T10:24:15
+JD Gaming,BerLIN,7857,https://www.vlr.gg/player/7857/berlin,Zhang Bolin (張柏霖),active,active,True,False,https://www.vlr.gg/team/13576/jdg-esports/,2026-07-12T10:24:15
+JD Gaming,JIANDAN,61326,https://www.vlr.gg/player/61326/jiandan,Wang Sai (王赛),manager,manager,False,True,https://www.vlr.gg/team/13576/jdg-esports/,2026-07-12T10:24:15
+JD Gaming,bail,980,https://www.vlr.gg/player/980/bail,Lee Sung-jae (이성재),head coach,head coach,False,True,https://www.vlr.gg/team/13576/jdg-esports/,2026-07-12T10:24:15
+JD Gaming,Desire,61268,https://www.vlr.gg/player/61268/desire,Peng Siji (彭思骥),assistant coach,assistant coach,False,True,https://www.vlr.gg/team/13576/jdg-esports/,2026-07-12T10:24:15
+JD Gaming,Phong,50166,https://www.vlr.gg/player/50166/phong,Huang Chunfeng (黄春峰),staff,staff,True,False,https://www.vlr.gg/team/13576/jdg-esports/,2026-07-12T10:24:15
+KRU Esports,saadhak,727,https://www.vlr.gg/player/727/saadhak,Matias Delipetro,active,active,True,False,https://www.vlr.gg/team/2355/kru-esports/,2026-07-12T10:24:16
+KRU Esports,mwzera,939,https://www.vlr.gg/player/939/mwzera,Leonardo Serrati,active,active,True,False,https://www.vlr.gg/team/2355/kru-esports/,2026-07-12T10:24:16
+KRU Esports,Less,8447,https://www.vlr.gg/player/8447/less,Felipe de Loyola Basso,active,active,True,False,https://www.vlr.gg/team/2355/kru-esports/,2026-07-12T10:24:16
+KRU Esports,Dantedeu5,41135,https://www.vlr.gg/player/41135/dantedeu5,Jesús Federico Larrosa,active,active,True,False,https://www.vlr.gg/team/2355/kru-esports/,2026-07-12T10:24:16
+KRU Esports,heat,8673,https://www.vlr.gg/player/8673/heat,Olavo Marcelo,active,active,True,False,https://www.vlr.gg/team/2355/kru-esports/,2026-07-12T10:24:16
+KRU Esports,torito,2796,https://www.vlr.gg/player/2796/torito,Cristobal Quintana,manager,manager,False,True,https://www.vlr.gg/team/2355/kru-esports/,2026-07-12T10:24:16
+KRU Esports,ZONYK,2933,https://www.vlr.gg/player/2933/zonyk,Nicolas Carboni,head coach,head coach,False,True,https://www.vlr.gg/team/2355/kru-esports/,2026-07-12T10:24:16
+KRU Esports,Fadeout,29380,https://www.vlr.gg/player/29380/fadeout,Alex Argüello,analyst,analyst,False,True,https://www.vlr.gg/team/2355/kru-esports/,2026-07-12T10:24:16
+KRU Esports,Nyogen,2476,https://www.vlr.gg/player/2476/nyogen,Tomás Castiglione,staff,staff,True,False,https://www.vlr.gg/team/2355/kru-esports/,2026-07-12T10:24:16
+KRU Esports,Psiarthurleon,60310,https://www.vlr.gg/player/60310/psiarthurleon,Arthur Leon,staff,staff,True,False,https://www.vlr.gg/team/2355/kru-esports/,2026-07-12T10:24:16
+Karmine Corp,dos9,16215,https://www.vlr.gg/player/16215/dos9,Zhumagali Dastan,active,active,True,False,https://www.vlr.gg/team/8877/karmine-corp/,2026-07-12T10:24:17
+Karmine Corp,LewN,20144,https://www.vlr.gg/player/20144/lewn,Burak Alkan,active,active,True,False,https://www.vlr.gg/team/8877/karmine-corp/,2026-07-12T10:24:17
+Karmine Corp,Avez,5654,https://www.vlr.gg/player/5654/avez,Hazem Khaled,active,active,True,False,https://www.vlr.gg/team/8877/karmine-corp/,2026-07-12T10:24:17
+Karmine Corp,SUYGETSU,2858,https://www.vlr.gg/player/2858/suygetsu,Dmitry Ilyushin,active,active,True,False,https://www.vlr.gg/team/8877/karmine-corp/,2026-07-12T10:24:17
+Karmine Corp,N4RRATE,36245,https://www.vlr.gg/player/36245/n4rrate,Marshall Massey,active,active,True,False,https://www.vlr.gg/team/8877/karmine-corp/,2026-07-12T10:24:17
+Karmine Corp,Chaza,48705,https://www.vlr.gg/player/48705/chaza,Charlie Phillips,Sub,sub,True,False,https://www.vlr.gg/team/8877/karmine-corp/,2026-07-12T10:24:17
+Karmine Corp,sheydos,1428,https://www.vlr.gg/player/1428/sheydos,Bogdan Naumov,Inactive,inactive,False,False,https://www.vlr.gg/team/8877/karmine-corp/,2026-07-12T10:24:17
+Karmine Corp,ZE1SH,302,https://www.vlr.gg/player/302/ze1sh,Ahmed El Sheikh,head coach,head coach,False,True,https://www.vlr.gg/team/8877/karmine-corp/,2026-07-12T10:24:17
+Karmine Corp,simoz,1943,https://www.vlr.gg/player/1943/simoz,Simone Giovannini,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/8877/karmine-corp/,2026-07-12T10:24:17
+LOUD,lukxo,28716,https://www.vlr.gg/player/28716/lukxo,Lucca Travaioli,active,active,True,False,https://www.vlr.gg/team/6961/loud/,2026-07-12T10:24:19
+LOUD,Darker,10557,https://www.vlr.gg/player/10557/darker,Sebastián Castro Cicuamia,active,active,True,False,https://www.vlr.gg/team/6961/loud/,2026-07-12T10:24:19
+LOUD,Virtyy,3983,https://www.vlr.gg/player/3983/virtyy,Leandro Moreno,active,active,True,False,https://www.vlr.gg/team/6961/loud/,2026-07-12T10:24:19
+LOUD,erde,29242,https://www.vlr.gg/player/29242/erde,Roberto Lobos,active,active,True,False,https://www.vlr.gg/team/6961/loud/,2026-07-12T10:24:19
+LOUD,cauanzin,6193,https://www.vlr.gg/player/6193/cauanzin,Cauan Pereira,active,active,True,False,https://www.vlr.gg/team/6961/loud/,2026-07-12T10:24:19
+LOUD,Wenty,57335,https://www.vlr.gg/player/57335/wenty,Carlos Lira Portela,manager,manager,False,True,https://www.vlr.gg/team/6961/loud/,2026-07-12T10:24:19
+LOUD,Romanilly,20833,https://www.vlr.gg/player/20833/romanilly,Gonzalo Manzano,head coach,head coach,False,True,https://www.vlr.gg/team/6961/loud/,2026-07-12T10:24:19
+LOUD,Bati,5203,https://www.vlr.gg/player/5203/bati,Miguel Batista,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/6961/loud/,2026-07-12T10:24:19
+LOUD,bajerski,57334,https://www.vlr.gg/player/57334/bajerski,Lucas Bajerski Pereira,performance coach,performance coach,False,True,https://www.vlr.gg/team/6961/loud/,2026-07-12T10:24:19
+Leviatan,kiNgg,8549,https://www.vlr.gg/player/8549/kingg,Francisco Aravena,active,active,True,False,https://www.vlr.gg/team/2359/leviatan/,2026-07-12T10:24:20
+Leviatan,spike,21661,https://www.vlr.gg/player/21661/spike,Rodrigo Lombardi,active,active,True,False,https://www.vlr.gg/team/2359/leviatan/,2026-07-12T10:24:20
+Leviatan,blowz,21251,https://www.vlr.gg/player/21251/blowz,Guilherme Oliviera,active,active,True,False,https://www.vlr.gg/team/2359/leviatan/,2026-07-12T10:24:20
+Leviatan,Neon,29243,https://www.vlr.gg/player/29243/neon,Bruno Rodríguez,active,active,True,False,https://www.vlr.gg/team/2359/leviatan/,2026-07-12T10:24:20
+Leviatan,Sato,21659,https://www.vlr.gg/player/21659/sato,Eduardo Kenzo Nagahama Sato,active,active,True,False,https://www.vlr.gg/team/2359/leviatan/,2026-07-12T10:24:20
+Leviatan,Onur,2455,https://www.vlr.gg/player/2455/onur,Rodrigo Dalmagro,head coach,head coach,False,True,https://www.vlr.gg/team/2359/leviatan/,2026-07-12T10:24:20
+Leviatan,Jhein,30972,https://www.vlr.gg/player/30972/jhein,Cristian Camaño,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/2359/leviatan/,2026-07-12T10:24:20
+MIBR,zekken,4004,https://www.vlr.gg/player/4004/zekken,Zachary Patrone,active,active,True,False,https://www.vlr.gg/team/7386/mibr/,2026-07-12T10:24:21
+MIBR,tex,1818,https://www.vlr.gg/player/1818/tex,Ian Botsch,active,active,True,False,https://www.vlr.gg/team/7386/mibr/,2026-07-12T10:24:21
+MIBR,Mazino,7603,https://www.vlr.gg/player/7603/mazino,Roberto Rivas,active,active,True,False,https://www.vlr.gg/team/7386/mibr/,2026-07-12T10:24:21
+MIBR,Verno,21668,https://www.vlr.gg/player/21668/verno,Andrew Maust,active,active,True,False,https://www.vlr.gg/team/7386/mibr/,2026-07-12T10:24:21
+MIBR,aspas,8480,https://www.vlr.gg/player/8480/aspas,Erick Santos,active,active,True,False,https://www.vlr.gg/team/7386/mibr/,2026-07-12T10:24:21
+MIBR,Nandinnn,61419,https://www.vlr.gg/player/61419/nandinnn,,manager,manager,False,True,https://www.vlr.gg/team/7386/mibr/,2026-07-12T10:24:21
+MIBR,fRoD,145,https://www.vlr.gg/player/145/frod,Daniel Montaner,head coach,head coach,False,True,https://www.vlr.gg/team/7386/mibr/,2026-07-12T10:24:21
+MIBR,Happy,255,https://www.vlr.gg/player/255/happy,Vincent Schopenhauer,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/7386/mibr/,2026-07-12T10:24:21
+NRG,Ethan,11225,https://www.vlr.gg/player/11225/ethan,Ethan Arnold,active,active,True,False,https://www.vlr.gg/team/1034/nrg/,2026-07-12T10:24:23
+NRG,keiko,11494,https://www.vlr.gg/player/11494/keiko,Georgio Sanassy,active,active,True,False,https://www.vlr.gg/team/1034/nrg/,2026-07-12T10:24:23
+NRG,brawk,2172,https://www.vlr.gg/player/2172/brawk,Brock Somerhalder,active,active,True,False,https://www.vlr.gg/team/1034/nrg/,2026-07-12T10:24:23
+NRG,mada,5132,https://www.vlr.gg/player/5132/mada,Adam Pampuch,active,active,True,False,https://www.vlr.gg/team/1034/nrg/,2026-07-12T10:24:23
+NRG,skuba,11118,https://www.vlr.gg/player/11118/skuba,Logan Jenkins,active,active,True,False,https://www.vlr.gg/team/1034/nrg/,2026-07-12T10:24:23
+NRG,Ry,47029,https://www.vlr.gg/player/47029/ry,Zachary Parr,manager,manager,False,True,https://www.vlr.gg/team/1034/nrg/,2026-07-12T10:24:23
+NRG,bonkar,7,https://www.vlr.gg/player/7/bonkar,Malkolm Rench,head coach,head coach,False,True,https://www.vlr.gg/team/1034/nrg/,2026-07-12T10:24:23
+NRG,mitch,612,https://www.vlr.gg/player/612/mitch,Mitch Semago,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/1034/nrg/,2026-07-12T10:24:23
+Natus Vincere,chloric,15639,https://www.vlr.gg/player/15639/chloric,Caide Heaton,active,active,True,False,https://www.vlr.gg/team/4915/natus-vincere/,2026-07-12T10:24:24
+Natus Vincere,ExiT,11917,https://www.vlr.gg/player/11917/exit,Abdullah Al-Twaijri,active,active,True,False,https://www.vlr.gg/team/4915/natus-vincere/,2026-07-12T10:24:24
+Natus Vincere,Ruxic,18677,https://www.vlr.gg/player/18677/ruxic,Uğur Güç,active,active,True,False,https://www.vlr.gg/team/4915/natus-vincere/,2026-07-12T10:24:24
+Natus Vincere,hiro,29867,https://www.vlr.gg/player/29867/hiro,Emirhan Kat,active,active,True,False,https://www.vlr.gg/team/4915/natus-vincere/,2026-07-12T10:24:24
+Natus Vincere,CyvOph,13258,https://www.vlr.gg/player/13258/cyvoph,Clement Millard,active,active,True,False,https://www.vlr.gg/team/4915/natus-vincere/,2026-07-12T10:24:24
+Natus Vincere,Shao,384,https://www.vlr.gg/player/384/shao,Andrey Kiprsky,Inactive,inactive,False,False,https://www.vlr.gg/team/4915/natus-vincere/,2026-07-12T10:24:24
+Natus Vincere,Filu,4544,https://www.vlr.gg/player/4544/filu,Dawid Czarnecki,Inactive,inactive,False,False,https://www.vlr.gg/team/4915/natus-vincere/,2026-07-12T10:24:24
+Natus Vincere,ANGE1,109,https://www.vlr.gg/player/109/ange1,Kyrylo Karasov,head coach,head coach,False,True,https://www.vlr.gg/team/4915/natus-vincere/,2026-07-12T10:24:24
+Natus Vincere,salah,1548,https://www.vlr.gg/player/1548/salah,Salah Barakat,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/4915/natus-vincere/,2026-07-12T10:24:24
+Natus Vincere,Zuzanna,49829,https://www.vlr.gg/player/49829/zuzanna,Zuzanna Hejduk-Mostowy,performance coach,performance coach,False,True,https://www.vlr.gg/team/4915/natus-vincere/,2026-07-12T10:24:24
+Natus Vincere,Xirreth,37655,https://www.vlr.gg/player/37655/xirreth,Urszula Klimczak,performance coach,performance coach,False,True,https://www.vlr.gg/team/4915/natus-vincere/,2026-07-12T10:24:24
+Natus Vincere,Flynn,25150,https://www.vlr.gg/player/25150/flynn,Alaa Nasrallah,analyst,analyst,False,True,https://www.vlr.gg/team/4915/natus-vincere/,2026-07-12T10:24:24
+Nongshim RedForce,Rb,488,https://www.vlr.gg/player/488/rb,Goo Sang-min (구상민),active,active,True,False,https://www.vlr.gg/team/11060/nongshim-redforce/,2026-07-12T10:24:26
+Nongshim RedForce,WoohyuN,66086,https://www.vlr.gg/player/66086/woohyun,Moon Woo-hyun (문우현),active,active,True,False,https://www.vlr.gg/team/11060/nongshim-redforce/,2026-07-12T10:24:26
+Nongshim RedForce,Xross,42772,https://www.vlr.gg/player/42772/xross,Jeonghwan (정환),active,active,True,False,https://www.vlr.gg/team/11060/nongshim-redforce/,2026-07-12T10:24:26
+Nongshim RedForce,Francis,31828,https://www.vlr.gg/player/31828/francis,Kim Mu-bin (김무빈),active,active,True,False,https://www.vlr.gg/team/11060/nongshim-redforce/,2026-07-12T10:24:26
+Nongshim RedForce,Dambi,31827,https://www.vlr.gg/player/31827/dambi,Lee Hyuk-kyu (이혁규),active,active,True,False,https://www.vlr.gg/team/11060/nongshim-redforce/,2026-07-12T10:24:26
+Nongshim RedForce,Ivy,31829,https://www.vlr.gg/player/31829/ivy,Park Sung-hyeon (박성현),active,active,True,False,https://www.vlr.gg/team/11060/nongshim-redforce/,2026-07-12T10:24:26
+Nongshim RedForce,SilKanoN,4124,https://www.vlr.gg/player/4124/silkanon,Kim Gyeong-min (김경민),head coach,head coach,False,True,https://www.vlr.gg/team/11060/nongshim-redforce/,2026-07-12T10:24:26
+Nongshim RedForce,yoman,25081,https://www.vlr.gg/player/25081/yoman,Chae Young-moon (채영문),coach,coach,False,True,https://www.vlr.gg/team/11060/nongshim-redforce/,2026-07-12T10:24:26
+Nongshim RedForce,Sungmin,35015,https://www.vlr.gg/player/35015/sungmin,So Seong-min (소성민),coach,coach,False,True,https://www.vlr.gg/team/11060/nongshim-redforce/,2026-07-12T10:24:26
+Nova Esports,qiutiaN,43007,https://www.vlr.gg/player/43007/qiutian,Bijan Moeinzadeh (慕英毕强),active,active,True,False,https://www.vlr.gg/team/12064/nova-esports/,2026-07-12T10:24:27
+Nova Esports,cb,39697,https://www.vlr.gg/player/39697/cb,Wang Qingchuan (王庆川),active,active,True,False,https://www.vlr.gg/team/12064/nova-esports/,2026-07-12T10:24:27
+Nova Esports,Ezeir,46460,https://www.vlr.gg/player/46460/ezeir,Zhao Zejun (赵泽骏),active,active,True,False,https://www.vlr.gg/team/12064/nova-esports/,2026-07-12T10:24:27
+Nova Esports,GuanG,41054,https://www.vlr.gg/player/41054/guang,Guang Honglin (光洪霖),active,active,True,False,https://www.vlr.gg/team/12064/nova-esports/,2026-07-12T10:24:27
+Nova Esports,swagzor,45492,https://www.vlr.gg/player/45492/swagzor,Mikhail Vaniushin,active,active,True,False,https://www.vlr.gg/team/12064/nova-esports/,2026-07-12T10:24:27
+Nova Esports,kodeth,39060,https://www.vlr.gg/player/39060/kodeth,Bo Li,Sub,sub,True,False,https://www.vlr.gg/team/12064/nova-esports/,2026-07-12T10:24:27
+Nova Esports,GREEN,34181,https://www.vlr.gg/player/34181/green,Qiu Jianzhi (邱建智),Sub,sub,True,False,https://www.vlr.gg/team/12064/nova-esports/,2026-07-12T10:24:27
+Nova Esports,24K,44580,https://www.vlr.gg/player/44580/24k,Shao Yubo (邵玉波),head coach,head coach,False,True,https://www.vlr.gg/team/12064/nova-esports/,2026-07-12T10:24:27
+Nova Esports,OnbusH,51240,https://www.vlr.gg/player/51240/onbush,Kim Taek-soo (김택수),coach,coach,False,True,https://www.vlr.gg/team/12064/nova-esports/,2026-07-12T10:24:27
+PCFIC Esports,qpert,7105,https://www.vlr.gg/player/7105/qpert,Mateja Mijovic,active,active,True,False,https://www.vlr.gg/team/3478/pcific-esports/,2026-07-12T10:24:28
+PCFIC Esports,al0rante,5292,https://www.vlr.gg/player/5292/al0rante,Felix Brandl,active,active,True,False,https://www.vlr.gg/team/3478/pcific-esports/,2026-07-12T10:24:28
+PCFIC Esports,cNed,573,https://www.vlr.gg/player/573/cned,Mehmet Yağız İpek,active,active,True,False,https://www.vlr.gg/team/3478/pcific-esports/,2026-07-12T10:24:28
+PCFIC Esports,NINJA,28948,https://www.vlr.gg/player/28948/ninja,Patryk Koczyba,active,active,True,False,https://www.vlr.gg/team/3478/pcific-esports/,2026-07-12T10:24:28
+PCFIC Esports,seven,8376,https://www.vlr.gg/player/8376/seven,Johann Hernandez,active,active,True,False,https://www.vlr.gg/team/3478/pcific-esports/,2026-07-12T10:24:28
+PCFIC Esports,thinkii,8810,https://www.vlr.gg/player/8810/thinkii,Manuel Martínez,head coach,head coach,False,True,https://www.vlr.gg/team/3478/pcific-esports/,2026-07-12T10:24:28
+PCFIC Esports,ZaeS,29383,https://www.vlr.gg/player/29383/zaes,Dario Gomez,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/3478/pcific-esports/,2026-07-12T10:24:28
+PCFIC Esports,Koyo,8741,https://www.vlr.gg/player/8741/koyo,Koray Arpat,analyst,analyst,False,True,https://www.vlr.gg/team/3478/pcific-esports/,2026-07-12T10:24:28
+Paper Rex,invy,8504,https://www.vlr.gg/player/8504/invy,Adrian Jiggs Reyes,active,active,True,False,https://www.vlr.gg/team/624/paper-rex/,2026-07-12T10:24:30
+Paper Rex,Jinggg,7378,https://www.vlr.gg/player/7378/jinggg,Wang Jing Jie,active,active,True,False,https://www.vlr.gg/team/624/paper-rex/,2026-07-12T10:24:30
+Paper Rex,f0rsakeN,9801,https://www.vlr.gg/player/9801/f0rsaken,Jason Susanto,active,active,True,False,https://www.vlr.gg/team/624/paper-rex/,2026-07-12T10:24:30
+Paper Rex,d4v41,9803,https://www.vlr.gg/player/9803/d4v41,Khalish Rusyaidee,active,active,True,False,https://www.vlr.gg/team/624/paper-rex/,2026-07-12T10:24:30
+Paper Rex,something,17086,https://www.vlr.gg/player/17086/something,Ilya Petrov,active,active,True,False,https://www.vlr.gg/team/624/paper-rex/,2026-07-12T10:24:30
+Paper Rex,Tommy,9799,https://www.vlr.gg/player/9799/tommy,Kumaresan Ramani,manager,manager,False,True,https://www.vlr.gg/team/624/paper-rex/,2026-07-12T10:24:30
+Paper Rex,alecks,9804,https://www.vlr.gg/player/9804/alecks,Alexandre Sallé,coach,coach,False,True,https://www.vlr.gg/team/624/paper-rex/,2026-07-12T10:24:30
+Paper Rex,Wendler,55829,https://www.vlr.gg/player/55829/wendler,Ashton Wendler,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/624/paper-rex/,2026-07-12T10:24:30
+Paper Rex,Panda,54678,https://www.vlr.gg/player/54678/panda,Laijhun Cheng,performance coach,performance coach,False,True,https://www.vlr.gg/team/624/paper-rex/,2026-07-12T10:24:30
+Rex Regum Qeon,crazyguy,1430,https://www.vlr.gg/player/1430/crazyguy,Ngô Công Anh,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-12T10:24:31
+Rex Regum Qeon,Monyet,8497,https://www.vlr.gg/player/8497/monyet,Cahya Nugraha,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-12T10:24:31
+Rex Regum Qeon,xffero,4871,https://www.vlr.gg/player/4871/xffero,David Monangin,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-12T10:24:31
+Rex Regum Qeon,Xan,11737,https://www.vlr.gg/player/11737/xan,Xan Ng,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-12T10:24:31
+Rex Regum Qeon,Jemkin,24895,https://www.vlr.gg/player/24895/jemkin,Maksim Batorov,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-12T10:24:31
+Rex Regum Qeon,Kushy,4866,https://www.vlr.gg/player/4866/kushy,Bryan Carlos Setiawan,active,active,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-12T10:24:31
+Rex Regum Qeon,SeasoNz,61084,https://www.vlr.gg/player/61084/seasonz,Joe Lai,manager,manager,False,True,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-12T10:24:31
+Rex Regum Qeon,Jovi,6570,https://www.vlr.gg/player/6570/jovi,Jovanni Vera,head coach,head coach,False,True,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-12T10:24:31
+Rex Regum Qeon,Warbirds,12224,https://www.vlr.gg/player/12224/warbirds,Evan Olzem,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-12T10:24:31
+Rex Regum Qeon,Rebecca,50175,https://www.vlr.gg/player/50175/rebecca,Rebecca Wong,performance coach,performance coach,False,True,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-12T10:24:31
+Rex Regum Qeon,Jomengz,62037,https://www.vlr.gg/player/62037/jomengz,Jonathan Hoo,staff,staff,True,False,https://www.vlr.gg/team/878/rex-regum-qeon/,2026-07-12T10:24:31
+Sentinels,johnqt,1265,https://www.vlr.gg/player/1265/johnqt,Mohamed Amine Ouarid,active,active,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-12T10:24:33
+Sentinels,Reduxx,8419,https://www.vlr.gg/player/8419/reduxx,Yassin Aboulalazm,active,active,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-12T10:24:33
+Sentinels,Jerrwin,34057,https://www.vlr.gg/player/34057/jerrwin,Gurjiwan Gill,active,active,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-12T10:24:33
+Sentinels,cortezia,5395,https://www.vlr.gg/player/5395/cortezia,Gabriel Cortez,active,active,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-12T10:24:33
+Sentinels,JonahP,4581,https://www.vlr.gg/player/4581/jonahp,Jonah Pulice,active,active,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-12T10:24:33
+Sentinels,Victor,261,https://www.vlr.gg/player/261/victor,Victor Wong,stand-in,stand-in,True,False,https://www.vlr.gg/team/2/sentinels/,2026-07-12T10:24:33
+Sentinels,Zyto,47462,https://www.vlr.gg/player/47462/zyto,Bryan Ybanez,manager,manager,False,True,https://www.vlr.gg/team/2/sentinels/,2026-07-12T10:24:33
+Sentinels,Ewok,8347,https://www.vlr.gg/player/8347/ewok,Marthinus Jacobus Van Der Walt,head coach,head coach,False,True,https://www.vlr.gg/team/2/sentinels/,2026-07-12T10:24:33
+Sentinels,GUNTER,28113,https://www.vlr.gg/player/28113/gunter,Luke Clives,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/2/sentinels/,2026-07-12T10:24:33
+T1,Munchkin,2489,https://www.vlr.gg/player/2489/munchkin,Byeon Sang-beom (변상범),active,active,True,False,https://www.vlr.gg/team/14/t1/,2026-07-12T10:24:34
+T1,stax,485,https://www.vlr.gg/player/485/stax,Kim Gu-taek (김구택),active,active,True,False,https://www.vlr.gg/team/14/t1/,2026-07-12T10:24:34
+T1,Meteor,13039,https://www.vlr.gg/player/13039/meteor,Kim Tae-oh (김태오),active,active,True,False,https://www.vlr.gg/team/14/t1/,2026-07-12T10:24:34
+T1,BuZz,804,https://www.vlr.gg/player/804/buzz,Yu Byeong-cheol (유병철),active,active,True,False,https://www.vlr.gg/team/14/t1/,2026-07-12T10:24:34
+T1,DH,43057,https://www.vlr.gg/player/43057/dh,Kang Dong-ho (강동호),active,active,True,False,https://www.vlr.gg/team/14/t1/,2026-07-12T10:24:34
+T1,iZu,29833,https://www.vlr.gg/player/29833/izu,Ham Woo-ju (함우주),active,active,True,False,https://www.vlr.gg/team/14/t1/,2026-07-12T10:24:34
+T1,Norman,47420,https://www.vlr.gg/player/47420/norman,Shin Jun-ho,manager,manager,False,True,https://www.vlr.gg/team/14/t1/,2026-07-12T10:24:34
+T1,KDG,37518,https://www.vlr.gg/player/37518/kdg,Kim Dong-gun (김동건),head coach,head coach,False,True,https://www.vlr.gg/team/14/t1/,2026-07-12T10:24:34
+T1,CheongGak,37198,https://www.vlr.gg/player/37198/cheonggak,Lee Il-ho (이일호),coach,coach,False,True,https://www.vlr.gg/team/14/t1/,2026-07-12T10:24:34
+TYLOO,splash,36685,https://www.vlr.gg/player/36685/splash,Moses Christophe Jonathan,active,active,True,False,https://www.vlr.gg/team/731/tyloo/,2026-07-12T10:24:36
+TYLOO,Scales,39485,https://www.vlr.gg/player/39485/scales,Zhang Zhen (张震),active,active,True,False,https://www.vlr.gg/team/731/tyloo/,2026-07-12T10:24:36
+TYLOO,Erv,55085,https://www.vlr.gg/player/55085/erv,Shen Zhiwei,active,active,True,False,https://www.vlr.gg/team/731/tyloo/,2026-07-12T10:24:36
+TYLOO,slowly,41739,https://www.vlr.gg/player/41739/slowly,Kelun Sun (孙科伦),active,active,True,False,https://www.vlr.gg/team/731/tyloo/,2026-07-12T10:24:36
+TYLOO,SiuFatBB,7849,https://www.vlr.gg/player/7849/siufatbb,Pong Gaa Hei (庞加曦),active,active,True,False,https://www.vlr.gg/team/731/tyloo/,2026-07-12T10:24:36
+TYLOO,xihe,64854,https://www.vlr.gg/player/64854/xihe,Peng Wenbo (彭文博),active,active,True,False,https://www.vlr.gg/team/731/tyloo/,2026-07-12T10:24:36
+TYLOO,fc4t,45809,https://www.vlr.gg/player/45809/fc4t,Yang Jiawei (杨家玮),manager,manager,False,True,https://www.vlr.gg/team/731/tyloo/,2026-07-12T10:24:36
+TYLOO,hypnotizing,48568,https://www.vlr.gg/player/48568/hypnotizing,Xie Haozhi (谢昊志),head coach,head coach,False,True,https://www.vlr.gg/team/731/tyloo/,2026-07-12T10:24:36
+TYLOO,Billyo,34214,https://www.vlr.gg/player/34214/billyo,Li Xinyu (李新宇),assistant coach,assistant coach,False,True,https://www.vlr.gg/team/731/tyloo/,2026-07-12T10:24:36
+TYLOO,sword9,3049,https://www.vlr.gg/player/3049/sword9,Li Wei (李卫),assistant coach,assistant coach,False,True,https://www.vlr.gg/team/731/tyloo/,2026-07-12T10:24:36
+TYLOO,Ominous,27277,https://www.vlr.gg/player/27277/ominous,Sushant Jha,analyst,analyst,False,True,https://www.vlr.gg/team/731/tyloo/,2026-07-12T10:24:36
+Team Heretics,Boo,1144,https://www.vlr.gg/player/1144/boo,Ričardas Lukaševičius,active,active,True,False,https://www.vlr.gg/team/1001/team-heretics/,2026-07-12T10:24:37
+Team Heretics,koshmaras,23365,https://www.vlr.gg/player/23365/koshmaras,Martynas Namikas,active,active,True,False,https://www.vlr.gg/team/1001/team-heretics/,2026-07-12T10:24:37
+Team Heretics,Wo0t,21328,https://www.vlr.gg/player/21328/wo0t,Mert Alkan,active,active,True,False,https://www.vlr.gg/team/1001/team-heretics/,2026-07-12T10:24:37
+Team Heretics,RieNs,10971,https://www.vlr.gg/player/10971/riens,Enes Ecirli,active,active,True,False,https://www.vlr.gg/team/1001/team-heretics/,2026-07-12T10:24:37
+Team Heretics,benjyfishy,29873,https://www.vlr.gg/player/29873/benjyfishy,Benjamin David Fish,active,active,True,False,https://www.vlr.gg/team/1001/team-heretics/,2026-07-12T10:24:37
+Team Heretics,Niklas,46268,https://www.vlr.gg/player/46268/niklas,Niklas Geiss,manager,manager,False,True,https://www.vlr.gg/team/1001/team-heretics/,2026-07-12T10:24:37
+Team Heretics,Copper,61338,https://www.vlr.gg/player/61338/copper,Daniel Blaimauer,manager,manager,False,True,https://www.vlr.gg/team/1001/team-heretics/,2026-07-12T10:24:37
+Team Heretics,neilzinho,2039,https://www.vlr.gg/player/2039/neilzinho,Neil Finlay,head coach,head coach,False,True,https://www.vlr.gg/team/1001/team-heretics/,2026-07-12T10:24:37
+Team Heretics,weber,2038,https://www.vlr.gg/player/2038/weber,Brandon Weber,coach,coach,False,True,https://www.vlr.gg/team/1001/team-heretics/,2026-07-12T10:24:37
+Team Heretics,Rob,61337,https://www.vlr.gg/player/61337/rob,Robert William Davies,performance coach,performance coach,False,True,https://www.vlr.gg/team/1001/team-heretics/,2026-07-12T10:24:37
+Team Heretics,Beni,62235,https://www.vlr.gg/player/62235/beni,Benedikt Baumann,analyst,analyst,False,True,https://www.vlr.gg/team/1001/team-heretics/,2026-07-12T10:24:37
+Team Liquid,nAts,457,https://www.vlr.gg/player/457/nats,Ayaz Akhmetshin,active,active,True,False,https://www.vlr.gg/team/474/team-liquid/,2026-07-12T10:24:39
+Team Liquid,purp0,1885,https://www.vlr.gg/player/1885/purp0,Semyon Borchev,active,active,True,False,https://www.vlr.gg/team/474/team-liquid/,2026-07-12T10:24:39
+Team Liquid,kamo,14681,https://www.vlr.gg/player/14681/kamo,Kamil Frąckowiak,active,active,True,False,https://www.vlr.gg/team/474/team-liquid/,2026-07-12T10:24:39
+Team Liquid,trexx,2168,https://www.vlr.gg/player/2168/trexx,Nikita Cherednichenko,active,active,True,False,https://www.vlr.gg/team/474/team-liquid/,2026-07-12T10:24:39
+Team Liquid,Kicks,11134,https://www.vlr.gg/player/11134/kicks,Kimmie Laasner,active,active,True,False,https://www.vlr.gg/team/474/team-liquid/,2026-07-12T10:24:39
+Team Liquid,wayne,24628,https://www.vlr.gg/player/24628/wayne,Wayne Chang,Inactive,inactive,False,False,https://www.vlr.gg/team/474/team-liquid/,2026-07-12T10:24:39
+Team Liquid,MiniBoo,18350,https://www.vlr.gg/player/18350/miniboo,Dominykas Lukaševičius,Inactive,inactive,False,False,https://www.vlr.gg/team/474/team-liquid/,2026-07-12T10:24:39
+Team Liquid,cauzed,18991,https://www.vlr.gg/player/18991/cauzed,Eamon Drea,manager,manager,False,True,https://www.vlr.gg/team/474/team-liquid/,2026-07-12T10:24:39
+Team Liquid,Mol,25349,https://www.vlr.gg/player/25349/mol,Berke Mol,manager,manager,False,True,https://www.vlr.gg/team/474/team-liquid/,2026-07-12T10:24:39
+Team Liquid,LohaN,2881,https://www.vlr.gg/player/2881/lohan,Ivo Albino,head coach,head coach,False,True,https://www.vlr.gg/team/474/team-liquid/,2026-07-12T10:24:39
+Team Liquid,yaotziN.,1474,https://www.vlr.gg/player/1474/yaotzin,Daniel Roczniak,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/474/team-liquid/,2026-07-12T10:24:39
+Team Liquid,Bacon9,15906,https://www.vlr.gg/player/15906/bacon9,Jake Lloyd,analyst,analyst,False,True,https://www.vlr.gg/team/474/team-liquid/,2026-07-12T10:24:39
+Team Secret,kellyS,7437,https://www.vlr.gg/player/7437/kellys,Kelly Sedillo,active,active,True,False,https://www.vlr.gg/team/6199/team-secret/,2026-07-12T10:24:40
+Team Secret,Zeus,46135,https://www.vlr.gg/player/46135/zeus,Jhian Vega,active,active,True,False,https://www.vlr.gg/team/6199/team-secret/,2026-07-12T10:24:40
+Team Secret,Sylvan,4056,https://www.vlr.gg/player/4056/sylvan,Go Young-sup (고영섭),active,active,True,False,https://www.vlr.gg/team/6199/team-secret/,2026-07-12T10:24:40
+Team Secret,BerserX,4874,https://www.vlr.gg/player/4874/berserx,Rizkie Adla Kusuma,active,active,True,False,https://www.vlr.gg/team/6199/team-secret/,2026-07-12T10:24:40
+Team Secret,Rimuru,48439,https://www.vlr.gg/player/48439/rimuru,Dwine Enriquez,Sub,sub,True,False,https://www.vlr.gg/team/6199/team-secret/,2026-07-12T10:24:40
+Team Secret,yamyam yui,35828,https://www.vlr.gg/player/35828/yamyam-yui,Yamyam Villanueva Yui,manager,manager,False,True,https://www.vlr.gg/team/6199/team-secret/,2026-07-12T10:24:40
+Team Secret,skye,7416,https://www.vlr.gg/player/7416/skye,Felipe Skye Lim,analyst,analyst,False,True,https://www.vlr.gg/team/6199/team-secret/,2026-07-12T10:24:40
+Team Vitality,Jamppi,9780,https://www.vlr.gg/player/9780/jamppi,Elias Olkkonen,active,active,True,False,https://www.vlr.gg/team/2059/team-vitality/,2026-07-12T10:24:41
+Team Vitality,PROFEK,5554,https://www.vlr.gg/player/5554/profek,Dawid Święć,active,active,True,False,https://www.vlr.gg/team/2059/team-vitality/,2026-07-12T10:24:41
+Team Vitality,Derke,5022,https://www.vlr.gg/player/5022/derke,Nikita Niko Sirmitev,active,active,True,False,https://www.vlr.gg/team/2059/team-vitality/,2026-07-12T10:24:41
+Team Vitality,Chronicle,458,https://www.vlr.gg/player/458/chronicle,Timofey Khromov,active,active,True,False,https://www.vlr.gg/team/2059/team-vitality/,2026-07-12T10:24:41
+Team Vitality,Sayonara,33902,https://www.vlr.gg/player/33902/sayonara,Ștefan Mîtcu,active,active,True,False,https://www.vlr.gg/team/2059/team-vitality/,2026-07-12T10:24:41
+Team Vitality,Bangovic,48871,https://www.vlr.gg/player/48871/bangovic,Andy Zajimovic,manager,manager,False,True,https://www.vlr.gg/team/2059/team-vitality/,2026-07-12T10:24:41
+Team Vitality,PAL,30280,https://www.vlr.gg/player/30280/pal,Gregor Morton,coach,coach,False,True,https://www.vlr.gg/team/2059/team-vitality/,2026-07-12T10:24:41
+Team Vitality,Scuttt,42554,https://www.vlr.gg/player/42554/scuttt,Benjamin Hutchinson,coach,coach,False,True,https://www.vlr.gg/team/2059/team-vitality/,2026-07-12T10:24:41
+Team Vitality,slk,361,https://www.vlr.gg/player/361/slk,Aleksey Lynksov,analyst,analyst,False,True,https://www.vlr.gg/team/2059/team-vitality/,2026-07-12T10:24:41
+Titan Esports Club,Haodong,4720,https://www.vlr.gg/player/4720/haodong,Guo Haodong (郭浩东),active,active,True,False,https://www.vlr.gg/team/14137/titan-esports-club/,2026-07-12T10:24:43
+Titan Esports Club,lucas,19677,https://www.vlr.gg/player/19677/lucas,Yunkun Lu (路昀昆),active,active,True,False,https://www.vlr.gg/team/14137/titan-esports-club/,2026-07-12T10:24:43
+Titan Esports Club,Spitfires,4881,https://www.vlr.gg/player/4881/spitfires,Xin Mingyan (辛明阳),active,active,True,False,https://www.vlr.gg/team/14137/titan-esports-club/,2026-07-12T10:24:43
+Titan Esports Club,Dynamite,42235,https://www.vlr.gg/player/42235/dynamite,Zhao Zihao (赵梓浩),active,active,True,False,https://www.vlr.gg/team/14137/titan-esports-club/,2026-07-12T10:24:43
+Titan Esports Club,ra1ny,63107,https://www.vlr.gg/player/63107/ra1ny,Chen Baohuan (陈葆桓),active,active,True,False,https://www.vlr.gg/team/14137/titan-esports-club/,2026-07-12T10:24:43
+Titan Esports Club,Coco,47629,https://www.vlr.gg/player/47629/coco,Ding Dajian (丁达建),active,active,True,False,https://www.vlr.gg/team/14137/titan-esports-club/,2026-07-12T10:24:43
+Titan Esports Club,Gazero,42709,https://www.vlr.gg/player/42709/gazero,Li Zhe (李哲),manager,manager,False,True,https://www.vlr.gg/team/14137/titan-esports-club/,2026-07-12T10:24:43
+Titan Esports Club,AfteR,8643,https://www.vlr.gg/player/8643/after,Lo Wen-Hsin (罗文信),head coach,head coach,False,True,https://www.vlr.gg/team/14137/titan-esports-club/,2026-07-12T10:24:43
+Titan Esports Club,Muggle,29401,https://www.vlr.gg/player/29401/muggle,Tang Shijun (唐时俊),coach,coach,False,True,https://www.vlr.gg/team/14137/titan-esports-club/,2026-07-12T10:24:43
+Titan Esports Club,3water,42154,https://www.vlr.gg/player/42154/3water,Liu Miao (刘淼),assistant coach,assistant coach,False,True,https://www.vlr.gg/team/14137/titan-esports-club/,2026-07-12T10:24:43
+Titan Esports Club,sora,56519,https://www.vlr.gg/player/56519/sora,Hao Jinyu (郝金淼),analyst,analyst,False,True,https://www.vlr.gg/team/14137/titan-esports-club/,2026-07-12T10:24:43
+Titan Esports Club,LemoN,61328,https://www.vlr.gg/player/61328/lemon,Liu Qirui (刘骐瑞),staff,staff,True,False,https://www.vlr.gg/team/14137/titan-esports-club/,2026-07-12T10:24:43
+Trace Esports,LuoK1ng,3045,https://www.vlr.gg/player/3045/luok1ng,Zhang Zhanpeng (张展鹏),active,active,True,False,https://www.vlr.gg/team/12685/trace-esports/,2026-07-12T10:24:44
+Trace Esports,Kai,37494,https://www.vlr.gg/player/37494/kai,Lu Zhinan (卢智楠),active,active,True,False,https://www.vlr.gg/team/12685/trace-esports/,2026-07-12T10:24:44
+Trace Esports,FengF,4770,https://www.vlr.gg/player/4770/fengf,Song Xuefeng (宋学锋),active,active,True,False,https://www.vlr.gg/team/12685/trace-esports/,2026-07-12T10:24:44
+Trace Esports,FKEY,51249,https://www.vlr.gg/player/51249/fkey,,active,active,True,False,https://www.vlr.gg/team/12685/trace-esports/,2026-07-12T10:24:44
+Trace Esports,deLb,10821,https://www.vlr.gg/player/10821/delb,Delbert Tanoto,active,active,True,False,https://www.vlr.gg/team/12685/trace-esports/,2026-07-12T10:24:44
+Trace Esports,Abo,5011,https://www.vlr.gg/player/5011/abo,Han Bohao (韩博皓),Sub,sub,True,False,https://www.vlr.gg/team/12685/trace-esports/,2026-07-12T10:24:44
+Trace Esports,KaKa,50170,https://www.vlr.gg/player/50170/kaka,Zhou Wenxing (周文兴),manager,manager,False,True,https://www.vlr.gg/team/12685/trace-esports/,2026-07-12T10:24:44
+Trace Esports,destroyeR,15249,https://www.vlr.gg/player/15249/destroyer,Gu Jiaming (顾佳鸣),head coach,head coach,False,True,https://www.vlr.gg/team/12685/trace-esports/,2026-07-12T10:24:44
+Trace Esports,Yiyee,38518,https://www.vlr.gg/player/38518/yiyee,Zhang Tianyuan (张天元),coach,coach,False,True,https://www.vlr.gg/team/12685/trace-esports/,2026-07-12T10:24:44
+Trace Esports,Viva,36415,https://www.vlr.gg/player/36415/viva,Lifan Ran (冉立凡),coach,coach,False,True,https://www.vlr.gg/team/12685/trace-esports/,2026-07-12T10:24:44
+Trace Esports,Draven,50171,https://www.vlr.gg/player/50171/draven,,staff,staff,True,False,https://www.vlr.gg/team/12685/trace-esports/,2026-07-12T10:24:44
+VARREL,Foxy9,11600,https://www.vlr.gg/player/11600/foxy9,Jung Jae-sung (정재성),active,active,True,False,https://www.vlr.gg/team/11229/varrel/,2026-07-12T10:24:45
+VARREL,C1ndeR,2149,https://www.vlr.gg/player/2149/c1nder,Ko Jae-hyuk (고재혁),active,active,True,False,https://www.vlr.gg/team/11229/varrel/,2026-07-12T10:24:45
+VARREL,Klaus,4426,https://www.vlr.gg/player/4426/klaus,Kim Min-hyuk (김민혁),active,active,True,False,https://www.vlr.gg/team/11229/varrel/,2026-07-12T10:24:45
+VARREL,XuNa,42733,https://www.vlr.gg/player/42733/xuna,Kim Tae-geon (김태건),active,active,True,False,https://www.vlr.gg/team/11229/varrel/,2026-07-12T10:24:45
+VARREL,oonzmlp,34926,https://www.vlr.gg/player/34926/oonzmlp,Shin Sang-beom (신상범),active,active,True,False,https://www.vlr.gg/team/11229/varrel/,2026-07-12T10:24:45
+VARREL,Zexy,37532,https://www.vlr.gg/player/37532/zexy,Jang Suk-hyun (장석현),active,active,True,False,https://www.vlr.gg/team/11229/varrel/,2026-07-12T10:24:45
+VARREL,TK9,25614,https://www.vlr.gg/player/25614/tk9,Goo Tae-kyun (구태균),head coach,head coach,False,True,https://www.vlr.gg/team/11229/varrel/,2026-07-12T10:24:45
+VARREL,R3THME,51241,https://www.vlr.gg/player/51241/r3thme,Kim Ki-woon (김기운),analyst,analyst,False,True,https://www.vlr.gg/team/11229/varrel/,2026-07-12T10:24:45
+Wolves Esports,glacier,49973,https://www.vlr.gg/player/49973/glacier,Liang Zhekai (梁哲恺),active,active,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-12T10:24:47
+Wolves Esports,yosemite,6022,https://www.vlr.gg/player/6022/yosemite,Wang Lei (王磊),active,active,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-12T10:24:47
+Wolves Esports,Spring,14125,https://www.vlr.gg/player/14125/spring,Liu Jiunting (刘俊霆),active,active,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-12T10:24:47
+Wolves Esports,Deryeon,9152,https://www.vlr.gg/player/9152/deryeon,Derrick Yee,active,active,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-12T10:24:47
+Wolves Esports,aluba,14441,https://www.vlr.gg/player/14441/aluba,Zhong Haojun (钟皓钧),active,active,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-12T10:24:47
+Wolves Esports,nothing,66083,https://www.vlr.gg/player/66083/nothing,Xie Junzheng (谢君正),Sub,sub,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-12T10:24:47
+Wolves Esports,Chao,61329,https://www.vlr.gg/player/61329/chao,,manager,manager,False,True,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-12T10:24:47
+Wolves Esports,alexRr,1163,https://www.vlr.gg/player/1163/alexrr,Alexander Frisch,head coach,head coach,False,True,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-12T10:24:47
+Wolves Esports,Ja7,61330,https://www.vlr.gg/player/61330/ja7,,staff,staff,True,False,https://www.vlr.gg/team/13790/wolves-esports/,2026-07-12T10:24:47
+Xi Lai Gaming,WsLeo,24308,https://www.vlr.gg/player/24308/wsleo,Huang Pinwei (黄品维),active,active,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-12T10:24:48
+Xi Lai Gaming,Lysoar,37489,https://www.vlr.gg/player/37489/lysoar,Liang Youhao (梁优好),active,active,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-12T10:24:48
+Xi Lai Gaming,NoMan,11527,https://www.vlr.gg/player/11527/noman,James Man,active,active,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-12T10:24:48
+Xi Lai Gaming,Rarga,22047,https://www.vlr.gg/player/22047/rarga,Arthur Churyumov,active,active,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-12T10:24:48
+Xi Lai Gaming,happywei,37927,https://www.vlr.gg/player/37927/happywei,Deng Minwei (邓闵维),active,active,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-12T10:24:48
+Xi Lai Gaming,Arty,4343,https://www.vlr.gg/player/4343/arty,Yang Zhe (杨喆),manager,manager,False,True,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-12T10:24:48
+Xi Lai Gaming,hvoya,1348,https://www.vlr.gg/player/1348/hvoya,Aleksandr Eremin,head coach,head coach,False,True,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-12T10:24:48
+Xi Lai Gaming,steady,1874,https://www.vlr.gg/player/1874/steady,Dmitry Prutkov,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-12T10:24:48
+Xi Lai Gaming,Coffin0,50163,https://www.vlr.gg/player/50163/coffin0,Tao Yumeng (陶禹萌),staff,staff,True,False,https://www.vlr.gg/team/13581/xi-lai-gaming/,2026-07-12T10:24:48
+ZETA DIVISION,Absol,34776,https://www.vlr.gg/player/34776/absol,Kazuki Fujinoki,active,active,True,False,https://www.vlr.gg/team/5448/zeta-division/,2026-07-12T10:24:50
+ZETA DIVISION,SyouTa,12990,https://www.vlr.gg/player/12990/syouta,Shota Aoki,active,active,True,False,https://www.vlr.gg/team/5448/zeta-division/,2026-07-12T10:24:50
+ZETA DIVISION,SugarZ3ro,6668,https://www.vlr.gg/player/6668/sugarz3ro,Shota Watanabe,active,active,True,False,https://www.vlr.gg/team/5448/zeta-division/,2026-07-12T10:24:50
+ZETA DIVISION,eKo,1960,https://www.vlr.gg/player/1960/eko,Yeom Wang-ryong (염왕룡),active,active,True,False,https://www.vlr.gg/team/5448/zeta-division/,2026-07-12T10:24:50
+ZETA DIVISION,Xdll,25221,https://www.vlr.gg/player/25221/xdll,Yuto Mizomori,active,active,True,False,https://www.vlr.gg/team/5448/zeta-division/,2026-07-12T10:24:50
+ZETA DIVISION,ryota-,1030,https://www.vlr.gg/player/1030/ryota,Ryota Okayama,head coach,head coach,False,True,https://www.vlr.gg/team/5448/zeta-division/,2026-07-12T10:24:50
+ZETA DIVISION,XQQ,6717,https://www.vlr.gg/player/6717/xqq,Motoyama Hibiki,assistant coach,assistant coach,False,True,https://www.vlr.gg/team/5448/zeta-division/,2026-07-12T10:24:50
+ZETA DIVISION,gya9,31170,https://www.vlr.gg/player/31170/gya9,,analyst,analyst,False,True,https://www.vlr.gg/team/5448/zeta-division/,2026-07-12T10:24:50
+ZETA DIVISION,Mini,3323,https://www.vlr.gg/player/3323/mini,Jacob Harris,staff,staff,True,False,https://www.vlr.gg/team/5448/zeta-division/,2026-07-12T10:24:50

@@ -4,21 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Valorant Match Predictor</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='model-jobs-v1') }}">
+  <script defer src="{{ url_for('static', filename='app.js', v='model-jobs-v1') }}"></script>
 </head>
 <body>
   <main class="app-shell">
     <header class="topbar">
-      <div>
-        <p class="eyebrow">VLR model workspace</p>
-        <h1>Valorant Match Predictor</h1>
-      </div>
-      {% if metrics %}
-      <div class="metric-pill">
-        <span>Training rows</span>
-        <strong>{{ metrics.get("player_training_rows", 0) }} / {{ metrics.get("team_training_rows", 0) }}</strong>
-      </div>
-      {% endif %}
+      <h1>Valorant Match Predictor</h1>
     </header>
 
     {% if error %}
@@ -28,11 +20,10 @@
       <section class="alert mod-success">{{ success }}</section>
     {% endif %}
 
-    <section class="control-grid">
-      <form class="panel" method="post" action="/predict">
+    <section class="workspace-grid">
+      <form class="panel mod-predict" method="post" action="/predict">
         <div class="panel-heading">
-          <h2>Predict Match</h2>
-          <button type="submit">Run Prediction</button>
+          <h2>Match</h2>
         </div>
 
         <div class="fields two">
@@ -54,128 +45,77 @@
           </label>
         </div>
 
-        <div class="fields four">
-          <label>
-            Best of
-            <select name="best_of">
-              {% for value in [1, 3, 5] %}
-                <option value="{{ value }}" {% if selected.best_of|string == value|string %}selected{% endif %}>Bo{{ value }}</option>
-              {% endfor %}
-            </select>
-          </label>
-          <label>
-            Season
-            <input name="season_year" value="{{ selected.season_year }}" inputmode="numeric">
-          </label>
-          <label>
-            Recent days
-            <input name="recent_days" value="{{ selected.recent_days }}" placeholder="optional" inputmode="numeric">
-          </label>
-          <label>
-            Player maps
-            <input name="recent_maps" value="{{ selected.recent_maps }}" inputmode="numeric">
-          </label>
-        </div>
-
-        <div class="fields three">
-          <label>
-            News days
-            <input name="recent_news_days" value="{{ selected.recent_news_days }}" inputmode="numeric">
-          </label>
-          <label>
-            Match limit
-            <input name="limit_per_team" value="{{ selected.limit_per_team }}" inputmode="numeric">
-          </label>
-          <label>
-            News pages
-            <input name="news_pages" value="{{ selected.news_pages }}" inputmode="numeric">
-          </label>
-        </div>
-
-        <div class="toggles">
-          <label><input type="checkbox" name="use_trained_models" {% if selected.use_trained_models %}checked{% endif %}> Use trained models</label>
-          <label><input type="checkbox" name="refresh_matches" {% if selected.refresh_matches %}checked{% endif %}> Refresh matches</label>
-          <label><input type="checkbox" name="refresh_news" {% if selected.refresh_news %}checked{% endif %}> Refresh news</label>
-          <label><input type="checkbox" name="refresh_rosters" {% if selected.refresh_rosters %}checked{% endif %}> Refresh rosters</label>
-        </div>
-      </form>
-
-      <form class="panel" method="post" action="/train">
-        <div class="panel-heading">
-          <h2>Train Models</h2>
-          <button type="submit">Train</button>
-        </div>
-
-        <div class="fields two">
-          <label>
-            Season
-            <input name="train_season_year" value="2026" inputmode="numeric">
-          </label>
-          <label>
-            Player window
-            <input name="train_recent_days" value="60" inputmode="numeric">
-          </label>
-        </div>
-
-        <div class="fields three">
-          <label>
-            Match limit
-            <input name="train_limit_per_team" value="75" inputmode="numeric">
-          </label>
-          <label>
-            Fallback years
-            <input name="fallback_years" value="1" inputmode="numeric">
-          </label>
-          <label>
-            Min maps
-            <input name="min_player_history_maps" value="3" inputmode="numeric">
-          </label>
-        </div>
-
-        <div class="toggles">
-          <label><input type="checkbox" name="train_refresh_matches"> Refresh matches before training</label>
-        </div>
-
-        {% if train_result %}
-          <div class="training-output">
-            <div><span>Player rows</span><strong>{{ train_result.player_training_rows }}</strong></div>
-            <div><span>Team rows</span><strong>{{ train_result.team_training_rows }}</strong></div>
-            <div><span>Player model</span><strong>{{ train_result.player_metrics.status }}</strong></div>
-            <div><span>Team model</span><strong>{{ train_result.team_metrics.status }}</strong></div>
+        <fieldset class="series-control">
+          <legend>Series</legend>
+          <div class="segmented-control">
+            {% for value in [1, 3, 5] %}
+              <label>
+                <input type="radio" name="best_of" value="{{ value }}" {% if selected.best_of|string == value|string %}checked{% endif %}>
+                <span>Bo{{ value }}</span>
+              </label>
+            {% endfor %}
           </div>
-        {% endif %}
+        </fieldset>
+
+        <div class="map-picker" data-map-picker>
+          <div class="map-picker-heading">
+            <span>Map order</span>
+            <button class="text-action" type="button" data-map-auto>Auto</button>
+          </div>
+          <div class="map-select-grid">
+            {% for index in range(1, 6) %}
+              <label data-map-slot="{{ index }}" {% if index > selected.best_of|int %}hidden{% endif %}>
+                Map {{ index }}
+                <select name="map_{{ index }}" data-map-select>
+                  <option value="">Auto</option>
+                  {% for map_name in map_options %}
+                    <option value="{{ map_name }}" {% if selected.maps[index - 1] == map_name %}selected{% endif %}>{{ map_name }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <input type="hidden" name="season_year" value="{{ selected.season_year }}">
+        <input type="hidden" name="recent_maps" value="{{ selected.recent_maps }}">
+        <input type="hidden" name="recent_news_days" value="{{ selected.recent_news_days }}">
+        <input type="hidden" name="use_trained_models" value="on">
+        <button class="primary-action" type="submit">Predict winner</button>
       </form>
 
-      <section class="panel">
+      <section class="panel mod-upcoming">
         <div class="panel-heading">
-          <h2>Tier 1 Teams</h2>
-          <form method="post" action="/teams/sync">
-            <button type="submit">Seed 2026 Tier 1</button>
+          <h2>Upcoming Tier 1</h2>
+          <form method="post" action="/data/update/upcoming">
+            <button class="secondary-action" type="submit">Refresh schedule</button>
           </form>
         </div>
 
-        {% if team_seed_status and team_seed_status.unresolved %}
-          <div class="registry-list">
-            <span>{{ team_seed_status.unresolved|length }} teams still need VLR URLs</span>
-            <div>
-              {% for team in team_seed_status.unresolved[:10] %}
-                <b>{{ team }}</b>{% if not loop.last %}, {% endif %}
-              {% endfor %}
-              {% if team_seed_status.unresolved|length > 10 %}...{% endif %}
-            </div>
+        {% if upcoming_matches %}
+          <div class="upcoming-list">
+            {% for match in upcoming_matches %}
+              <form class="upcoming-match" method="post" action="/predict">
+                <input type="hidden" name="team1" value="{{ match.team1 }}">
+                <input type="hidden" name="team2" value="{{ match.team2 }}">
+                <input type="hidden" name="best_of" value="{{ match.best_of or 3 }}">
+                <input type="hidden" name="season_year" value="{{ selected.season_year }}">
+                <input type="hidden" name="recent_maps" value="{{ selected.recent_maps }}">
+                <input type="hidden" name="recent_news_days" value="{{ selected.recent_news_days }}">
+                <input type="hidden" name="match_date" value="{{ match.match_date }}">
+                <input type="hidden" name="event_name" value="{{ match.event_name }}">
+                <input type="hidden" name="event_stage" value="{{ match.event_stage }}">
+                <input type="hidden" name="use_trained_models" value="on">
+                <div>
+                  <strong>{{ match.team1 }} <span>vs</span> {{ match.team2 }}</strong>
+                  <small>{{ match.display_date }}{% if match.event_name %} / {{ match.event_name }}{% endif %}</small>
+                </div>
+                <button class="secondary-action" type="submit">Predict</button>
+              </form>
+            {% endfor %}
           </div>
-        {% endif %}
-
-        {% if team_registry %}
-          <div class="registry-list">
-            <span>{{ team_registry|length }} active VCT Tier 1 teams</span>
-            <div>
-              {% for row in team_registry[:12] %}
-                <b>{{ row.team }}</b>{% if row.league %} <span>({{ row.league }})</span>{% endif %}{% if not loop.last %}, {% endif %}
-              {% endfor %}
-              {% if team_registry|length > 12 %}...{% endif %}
-            </div>
-          </div>
+        {% else %}
+          <p class="empty-state">No upcoming Tier 1 matches stored.</p>
         {% endif %}
       </section>
     </section>
@@ -184,36 +124,93 @@
     {% if display and display.summary %}
       <section class="result-layout">
         <div class="scoreboard">
-          <div class="team-result">
-            <span>{{ display.summary.team1 }}</span>
-            <strong>{{ "%.1f"|format((display.summary.team1_win_probability or 0) * 100) }}%</strong>
-          </div>
-          <div class="probability-track">
-            <div class="probability-fill" style="width: {{ (display.summary.team1_win_probability or 0) * 100 }}%"></div>
-          </div>
-          <div class="team-result mod-right">
-            <span>{{ display.summary.team2 }}</span>
-            <strong>{{ "%.1f"|format((display.summary.team2_win_probability or 0) * 100) }}%</strong>
-          </div>
-          <div class="winner">
+          <div class="winner-call">
             <span>Predicted winner</span>
             <strong>{{ display.summary.predicted_winner }}</strong>
+            {% if display.summary.likely_score %}<b>{{ display.summary.likely_score }}</b>{% endif %}
+          </div>
+
+          <div class="probability-row">
+            <div class="team-result">
+              <span>{{ display.summary.team1 }}</span>
+              <strong>{{ "%.1f"|format((display.summary.team1_win_probability or 0) * 100) }}%</strong>
+            </div>
+            <div class="probability-track" aria-label="Win probability">
+              <div class="probability-fill" style="width: {{ (display.summary.team1_win_probability or 0) * 100 }}%"></div>
+            </div>
+            <div class="team-result mod-right">
+              <span>{{ display.summary.team2 }}</span>
+              <strong>{{ "%.1f"|format((display.summary.team2_win_probability or 0) * 100) }}%</strong>
+            </div>
           </div>
         </div>
 
-        <div class="table-panel">
-          <h2>Team Ratings</h2>
+        <div class="forecast-strip">
+          <div>
+            <span>Evidence quality</span>
+            <strong>{{ "%.1f"|format((display.summary.confidence_factor or 0) * 100) }}%</strong>
+          </div>
+          <div>
+            <span>{{ display.summary.team1 }} simulation range</span>
+            <strong>{{ "%.1f"|format((display.summary.team1_probability_low or 0) * 100) }}-{{ "%.1f"|format((display.summary.team1_probability_high or 0) * 100) }}%</strong>
+          </div>
+          <div>
+            <span>{{ "Selected" if display.summary.map_selection_source == "selected" else "Estimated" }} maps</span>
+            <strong>{{ display.summary.likely_map_order|replace(" | ", ", ") if display.summary.likely_map_order else "Not available" }}</strong>
+          </div>
+        </div>
+
+        {% if display.summary.reasons %}
+          <ul class="reason-list">
+            {% for reason in display.summary.reasons.split(" | ") %}
+              <li>{{ reason }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+
+        {% if display.summary.get("map_1_name") %}
+          <section class="table-panel">
+            <h2>Map Forecast</h2>
+            <div class="table-wrap">
+              <table class="map-table">
+                <thead>
+                  <tr>
+                    <th>Map</th>
+                    <th>{{ display.summary.team1 }}</th>
+                    <th>{{ display.summary.team2 }}</th>
+                    <th>Pick</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for index in range(1, (display.summary.best_of|int) + 1) %}
+                    {% set map_name = display.summary.get("map_" ~ index ~ "_name") %}
+                    {% if map_name %}
+                      <tr>
+                        <td>{{ map_name }}</td>
+                        <td>{{ "%.1f"|format((display.summary.get("map_" ~ index ~ "_team1_win_probability") or 0) * 100) }}%</td>
+                        <td>{{ "%.1f"|format((display.summary.get("map_" ~ index ~ "_team2_win_probability") or 0) * 100) }}%</td>
+                        <td><strong>{{ display.summary.get("map_" ~ index ~ "_predicted_winner") }}</strong></td>
+                      </tr>
+                    {% endif %}
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        {% endif %}
+
+        <section class="table-panel">
+          <h2>Team Comparison</h2>
           <div class="table-wrap">
-            <table>
+            <table class="team-table">
               <thead>
                 <tr>
                   <th>Team</th>
-                  <th>Rating</th>
-                  <th>Player Avg</th>
-                  <th>Win Rate</th>
-                  <th>News</th>
-                  <th>Roster Risk</th>
-                  <th>Reliability</th>
+                  <th>Lineup score</th>
+                  <th>Player rating</th>
+                  <th>Recent form</th>
+                  <th>Map edge</th>
+                  <th>Lineup certainty</th>
                 </tr>
               </thead>
               <tbody>
@@ -222,30 +219,29 @@
                     <td>{{ row.team }}</td>
                     <td>{{ "%.3f"|format(row.strength or 0) }}</td>
                     <td>{{ "%.3f"|format(row.avg_player_rating or 0) }}</td>
-                    <td>{{ "%.3f"|format(row.recent_win_rate or 0) }}</td>
-                    <td>{{ "%.3f"|format(row.avg_news_adjustment or 0) }}</td>
-                    <td>{{ "%.3f"|format(row.avg_roster_uncertainty or 0) }}</td>
-                    <td>{{ "%.3f"|format(row.lineup_reliability or 0) }}</td>
+                    <td>{{ "%.1f"|format((row.recent_win_rate or 0) * 100) }}%</td>
+                    <td>{{ "%+.1f"|format((row.map_pool_edge or 0) * 100) }}%</td>
+                    <td>{{ "%.0f"|format((row.lineup_certainty or 0) * 100) }}%</td>
                   </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
 
-        <div class="table-panel">
-          <h2>Player Ratings</h2>
+        <section class="table-panel">
+          <h2>Predicted Player Ratings</h2>
           <div class="table-wrap">
-            <table>
+            <table class="player-table">
               <thead>
                 <tr>
                   <th>Team</th>
                   <th>Player</th>
-                  <th>Pred</th>
-                  <th>Base</th>
-                  <th>News</th>
-                  <th>Maps</th>
-                  <th>New</th>
+                  <th>Rating</th>
+                  <th>80% range</th>
+                  <th>Recent maps</th>
+                  <th>News impact</th>
+                  <th>Availability</th>
                   <th>Lineup</th>
                 </tr>
               </thead>
@@ -254,20 +250,147 @@
                   <tr>
                     <td>{{ row.team }}</td>
                     <td>{{ row.player }}</td>
-                    <td>{{ "%.3f"|format(row.predicted_rating or 0) }}</td>
-                    <td>{{ "%.3f"|format(row.base_rating or 0) }}</td>
-                    <td>{{ "%.3f"|format(row.news_adjustment or 0) }}</td>
-                    <td>{{ row.recent_maps }}</td>
-                    <td>{{ "yes" if row.is_new_to_team else "no" }}</td>
-                    <td>{{ "yes" if row.used_in_lineup else "no" }}</td>
+                    <td><strong>{{ "%.3f"|format(row.predicted_rating or 0) }}</strong></td>
+                    <td>
+                      {% if row.predicted_rating_low is defined %}
+                        {{ "%.3f"|format(row.predicted_rating_low or 0) }}-{{ "%.3f"|format(row.predicted_rating_high or 0) }}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+                    <td>{{ row.maps_60d if row.maps_60d is defined else row.recent_maps }}</td>
+                    <td>{{ "%+.3f"|format(row.news_adjustment or 0) }}</td>
+                    <td>{{ "%.0f"|format((row.availability_probability or 1) * 100) }}%</td>
+                    <td>{{ "Starter" if row.used_in_lineup else "Reserve" }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
       </section>
     {% endif %}
+
+    <details class="maintenance-panel" {% if job_running or job.status in ["completed", "failed"] %}open{% endif %}>
+      <summary>
+        <span>Data &amp; model</span>
+        <small>{{ metrics.get("model_version", "Not trained") if metrics else "Not trained" }} - {{ match_coverage.teams_at_target if match_coverage else 0 }} of {{ match_coverage.teams if match_coverage else 0 }} teams at the match benchmark</small>
+      </summary>
+
+      <div class="maintenance-body">
+        <div class="status-strip">
+          <div>
+            <span>Match coverage</span>
+            <strong>{{ match_coverage.teams_at_target if match_coverage else 0 }}/{{ match_coverage.teams if match_coverage else 0 }}</strong>
+          </div>
+          <div>
+            <span>Roster coverage</span>
+            <strong>{{ roster_coverage.teams_at_target if roster_coverage else 0 }}/{{ roster_coverage.teams if roster_coverage else 0 }}</strong>
+          </div>
+          <div>
+            <span>Model version</span>
+            <strong>{{ metrics.get("model_version", "Not trained") if metrics else "Not trained" }}</strong>
+          </div>
+        </div>
+
+        <form class="model-control-form" method="post">
+          <div class="model-select-grid">
+            {% for task, label in [("player", "Player rating"), ("team", "Match winner"), ("map", "Map winner")] %}
+              <label>
+                {{ label }} model
+                <select name="{{ task }}_model" {% if job_running %}disabled{% endif %}>
+                  {% for model_id, model_label in model_choices[task].items() %}
+                    <option value="{{ model_id }}" {% if model_selection[task] == model_id %}selected{% endif %}>{{ model_label }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+            {% endfor %}
+          </div>
+          <div class="maintenance-actions">
+            <button type="submit" formaction="/jobs/database-update" {% if job_running %}disabled{% endif %}>Update database &amp; model</button>
+            <button class="secondary-action" type="submit" formaction="/train" {% if job_running %}disabled{% endif %}>Train &amp; evaluate</button>
+          </div>
+        </form>
+
+        {% if job %}
+          <div class="job-status" data-job-status data-state="{{ job.status }}">
+            <div class="job-status-heading">
+              <span>{{ job.job_type|replace("_", " ")|title }}</span>
+              <strong data-job-state>{{ job.status|replace("_", " ")|title }}</strong>
+            </div>
+            <div class="job-progress" aria-label="Job progress">
+              <div data-job-progress style="width: {{ (job.progress or 0) * 100 }}%"></div>
+            </div>
+            <small data-job-message>{{ job.message }}</small>
+          </div>
+        {% endif %}
+
+        {% if metrics %}
+          <div class="model-report-list">
+            {% for report in model_reports %}
+              <section class="model-report">
+                <div class="model-report-heading">
+                  <h3>{{ report.title }}</h3>
+                  <span>
+                    Active: {{ model_choices[report.task].get(report.active, report.active)|default("Not trained", true) }}
+                    {% if report.evaluated and report.evaluated != report.active %}
+                      / Evaluated: {{ model_choices[report.task].get(report.evaluated, report.evaluated) }}
+                    {% elif report.recommended and report.recommended != report.active %}
+                      / Validation best: {{ model_choices[report.task].get(report.recommended, report.recommended) }}
+                    {% endif %}
+                  </span>
+                </div>
+                <div class="table-wrap">
+                  <table class="model-table">
+                    <thead>
+                      <tr>
+                        <th>Model</th>
+                        <th>Validation {{ report.metric_label }}</th>
+                        {% if report.task != "player" %}
+                          <th>Validation accuracy</th>
+                        {% endif %}
+                        <th>Test {{ report.metric_label }}</th>
+                        {% if report.task != "player" %}<th>Test accuracy</th>{% endif %}
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for model in report.rows %}
+                        <tr>
+                          <td>{{ model.name }}</td>
+                          <td>{{ "%.4f"|format(model.validation_metric) if model.validation_metric is not none else "-" }}</td>
+                          {% if report.task != "player" %}
+                            <td>{{ "%.1f%%"|format(model.validation_accuracy * 100) if model.validation_accuracy is not none else "-" }}</td>
+                          {% endif %}
+                          <td>{{ "%.4f"|format(model.test_metric) if model.test_metric is not none else "-" }}</td>
+                          {% if report.task != "player" %}<td>{{ "%.1f%%"|format(model.test_accuracy * 100) if model.test_accuracy is not none else "-" }}</td>{% endif %}
+                          <td>
+                            {% if model.id == report.active %}<strong>Active</strong>{% endif %}
+                            {% if model.id == report.evaluated and model.id != report.active %}Held-out rejected{% endif %}
+                            {% if model.id == report.recommended and model.id not in [report.active, report.evaluated] %}Validation best{% endif %}
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+                <small class="model-report-meta">
+                  {{ report.test_rows or 0 }} test rows{% if report.test_matches %} across {{ report.test_matches }} matches{% endif %}
+                  {% if report.skill_vs_baseline is not none %} / MAE skill vs last-10: {{ "%+.1f"|format(report.skill_vs_baseline * 100) }}%{% endif %}
+                  {% if report.interval_coverage is not none %} / 80% interval coverage: {{ "%.1f"|format(report.interval_coverage * 100) }}%{% endif %}
+                  {% if report.brier_score is not none %} / Test Brier: {{ "%.4f"|format(report.brier_score) }}{% endif %}
+                  {% if report.reliability is not none %} / Measured reliability: {{ "%.1f"|format(report.reliability * 100) }}%{% endif %}
+                  {% if report.model_blend_weight is not none %} / Learner blend: {{ "%.0f"|format(report.model_blend_weight * 100) }}%{% endif %}
+                  {% if report.max_model_delta is not none %} / Raw delta cap: +/-{{ "%.0f"|format(report.max_model_delta * 100) }} points{% endif %}
+                  {% if report.candidate_rejected %} / Validation winner failed the later test; baseline is active{% endif %}
+                  {% if report.selection_mode == "manual" and not report.passed_safeguard %} / Manual override is active despite missing the safeguard{% endif %}
+                </small>
+              </section>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    </details>
   </main>
 </body>
 </html>
