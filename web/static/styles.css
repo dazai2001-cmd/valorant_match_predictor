@@ -184,6 +184,21 @@ select {
   gap: 8px;
 }
 
+.map-slot {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.map-slot select {
+  height: 38px;
+  margin-top: 4px;
+}
+
 .map-select-grid [hidden] {
   display: none;
 }

@@ -13,8 +13,18 @@ from valorant_predictor.features.form_calculations import (
     filter_curated_competition_history,
     player_form_from_group,
 )
+from valorant_predictor.data_quality import (
+    classify_event_tier,
+    enrich_match_metadata,
+    filter_training_ready_matches,
+)
 from valorant_predictor.features.news_impact import player_news_adjustments, structure_news_events
-from valorant_predictor.features.team_context import build_sequential_team_context
+from valorant_predictor.features.team_context import (
+    build_sequential_team_context,
+    hierarchical_map_probability,
+    map_history_reliability,
+    rebase_map_probability,
+)
 from valorant_predictor.model_selection import normalize_model_selection
 from valorant_predictor.prediction.predict_match import blend_map_model_probabilities
 from valorant_predictor.prediction.simulation import simulate_series
@@ -26,6 +36,7 @@ from valorant_predictor.team_registry import (
 from valorant_predictor.training.train_models import (
     add_training_weights,
     apply_probability_blend_temperature,
+    apply_team_anchored_map_correction,
     grouped_chronological_split,
     grouped_chronological_three_way_split,
     rolling_origin_splits,
@@ -152,6 +163,43 @@ class ModelLogicTests(unittest.TestCase):
 
         self.assertTrue((abs(forward + reverse - 1.0) < 1e-10).all())
 
+    def test_map_reliability_requires_history_from_both_teams(self):
+        one_sided = map_history_reliability(30, 0)
+        sparse = map_history_reliability(2, 2)
+        mature = map_history_reliability(20, 20)
+
+        self.assertEqual(one_sided, 0.0)
+        self.assertGreater(mature, sparse)
+        self.assertLess(mature, 1.0)
+
+    def test_hierarchical_map_probability_keeps_team_as_the_anchor(self):
+        sparse = hierarchical_map_probability(0.70, 0.20, reliability=0.10)
+        mature = hierarchical_map_probability(0.70, 0.20, reliability=1.0)
+        reverse = hierarchical_map_probability(0.30, 0.80, reliability=1.0)
+
+        self.assertGreater(sparse, mature)
+        self.assertGreater(sparse, 0.65)
+        self.assertGreater(mature, 0.50)
+        self.assertAlmostEqual(mature + reverse, 1.0)
+
+    def test_map_learner_correction_is_capped_and_reliability_scaled(self):
+        corrected = apply_team_anchored_map_correction(
+            [0.20, 0.90],
+            [0.62, 0.62],
+            [0.0, 1.0],
+            blend_weight=1.0,
+        )
+
+        self.assertAlmostEqual(corrected[0], 0.62)
+        self.assertAlmostEqual(corrected[1], 0.72)
+
+    def test_rebasing_map_probability_preserves_the_team_prior(self):
+        self.assertAlmostEqual(rebase_map_probability(0.55, 0.55, 0.63), 0.63)
+        forward = rebase_map_probability(0.60, 0.55, 0.63)
+        reverse = rebase_map_probability(0.40, 0.45, 0.37)
+
+        self.assertAlmostEqual(forward + reverse, 1.0)
+
     def test_map_model_is_deployed_in_proportion_to_measured_reliability(self):
         blended, weight = blend_map_model_probabilities(
             {"Haven": 0.42},
@@ -242,6 +290,32 @@ class ModelLogicTests(unittest.TestCase):
         self.assertEqual(len(weighted), 2)
         self.assertGreater(weighted.iloc[1]["training_weight"], weighted.iloc[0]["training_weight"])
 
+    def test_quality_enrichment_classifies_events_and_estimates_patch(self):
+        rows = []
+        for team, opponent in [("A", "B"), ("B", "A")]:
+            for player_index in range(5):
+                rows.append(
+                    {
+                        "match_id": 11,
+                        "match_date": "2026-02-03T12:00:00Z",
+                        "team": team,
+                        "opponent": opponent,
+                        "player": f"{team}{player_index}",
+                        "team_score": 2 if team == "A" else 1,
+                        "opp_score": 1 if team == "A" else 2,
+                        "event_name": "Valorant Champions Tour 2026: Americas Stage 1",
+                    }
+                )
+
+        enriched = enrich_match_metadata(pd.DataFrame(rows))
+        ready = filter_training_ready_matches(enriched)
+
+        self.assertEqual(classify_event_tier(pd.NA), "unknown")
+        self.assertEqual(set(enriched["competition_tier"]), {"tier1"})
+        self.assertEqual(set(enriched["event_region"]), {"VCT Americas"})
+        self.assertTrue(enriched["patch"].str.startswith("estimated-").all())
+        self.assertEqual(ready["match_id"].nunique(), 1)
+
     def test_rolling_origin_splits_move_forward_without_match_leakage(self):
         frame = pd.DataFrame(
             [
@@ -274,10 +348,10 @@ class ModelLogicTests(unittest.TestCase):
     def test_sequential_context_uses_only_prior_results(self):
         team_matches = pd.DataFrame(
             [
-                {"match_key": "id:1", "match_id": 1, "match_date_sort": pd.Timestamp("2026-01-01", tz="UTC"), "team": "A", "opponent": "B", "team_win": 1.0, "score_margin": 1.0},
-                {"match_key": "id:1", "match_id": 1, "match_date_sort": pd.Timestamp("2026-01-01", tz="UTC"), "team": "B", "opponent": "A", "team_win": 0.0, "score_margin": -1.0},
-                {"match_key": "id:2", "match_id": 2, "match_date_sort": pd.Timestamp("2026-02-01", tz="UTC"), "team": "A", "opponent": "B", "team_win": 0.0, "score_margin": -1.0},
-                {"match_key": "id:2", "match_id": 2, "match_date_sort": pd.Timestamp("2026-02-01", tz="UTC"), "team": "B", "opponent": "A", "team_win": 1.0, "score_margin": 1.0},
+                {"match_key": "id:1", "match_id": 1, "match_date_sort": pd.Timestamp("2026-01-01", tz="UTC"), "team": "A", "opponent": "B", "team_region": "Americas", "team_win": 1.0, "score_margin": 1.0},
+                {"match_key": "id:1", "match_id": 1, "match_date_sort": pd.Timestamp("2026-01-01", tz="UTC"), "team": "B", "opponent": "A", "team_region": "EMEA", "team_win": 0.0, "score_margin": -1.0},
+                {"match_key": "id:2", "match_id": 2, "match_date_sort": pd.Timestamp("2026-02-01", tz="UTC"), "team": "A", "opponent": "B", "team_region": "Americas", "team_win": 0.0, "score_margin": -1.0},
+                {"match_key": "id:2", "match_id": 2, "match_date_sort": pd.Timestamp("2026-02-01", tz="UTC"), "team": "B", "opponent": "A", "team_region": "EMEA", "team_win": 1.0, "score_margin": 1.0},
             ]
         )
         cleaned_rows = []
@@ -307,7 +381,11 @@ class ModelLogicTests(unittest.TestCase):
         second_match_a = context[(context["match_key"] == "id:2") & (context["team"] == "A")].iloc[0]
 
         self.assertGreater(second_match_a["elo_diff"], 0.0)
+        self.assertGreater(second_match_a["region_elo_diff"], 0.0)
         self.assertGreater(second_match_a["map_pool_win_rate_diff"], 0.0)
+        self.assertGreater(second_match_a["map_pool_elo_diff"], 0.0)
+        self.assertGreater(second_match_a["map_reliabilities"]["Ascent"], 0.0)
+        self.assertGreater(second_match_a["lineup_rating_diff"], 0.0)
         self.assertLess(second_match_a["minimum_elo_freshness"], 1.0)
 
     def test_news_events_separate_rating_and_roster_uncertainty(self):

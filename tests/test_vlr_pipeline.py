@@ -67,6 +67,32 @@ def stats_table(prefix):
     return f'<table class="wf-table-inset"><tbody>{rows}</tbody></table>'
 
 
+def overview_player_row(player, player_id):
+    return f"""
+      <div class="ovw-row">
+        <div class="ovw-cell mod-player">
+          <div class="ovw-player">
+            <a href="/player/{player_id}/{player}"><div class="ovw-player-name">{player}</div></a>
+          </div>
+          <div class="ovw-agents"><img title="Viper" alt="viper"></div>
+        </div>
+        <div class="ovw-cell" data-col="rating2"><span class="side mod-both">1.20</span></div>
+        <div class="ovw-cell" data-col="acs"><span class="side mod-both">240</span></div>
+        <div class="ovw-cell mod-kda">
+          <span class="ovw-kda-stat" data-col="kills"><span class="side mod-both">20</span></span>
+          <span class="ovw-kda-stat" data-col="deaths"><span class="side mod-both">14</span></span>
+          <span class="ovw-kda-stat" data-col="assists"><span class="side mod-both">6</span></span>
+        </div>
+      </div>
+    """
+
+
+def overview_stats():
+    first = "".join(overview_player_row(f"new-a{index}", 100 + index) for index in range(5))
+    second = "".join(overview_player_row(f"new-b{index}", 200 + index) for index in range(5))
+    return f'<div class="ovw-table"><div class="ovw-row mod-head"></div>{first}<div class="ovw-row mod-head"></div>{second}</div>'
+
+
 def match_html():
     aggregate = stats_table("aggregate-a") + stats_table("aggregate-b")
     maps = stats_table("a") + stats_table("b")
@@ -86,6 +112,26 @@ def match_html():
           <div class="team mod-right"><div class="score">9</div></div>
         </div>
         {maps}
+      </div>
+    """
+
+
+def overview_match_html():
+    return f"""
+      <div class="match-header">
+        <a href="/team/3478/pcific-esports/"><div class="wf-title-med">PCIFIC Esports</div></a>
+        <div class="match-header-vs-score">2 : 1</div>
+        <a href="/team/14419/giantx/"><div class="wf-title-med">GIANTX</div></a>
+      </div>
+      <span data-utc-ts="2026-05-12 12:00:00"></span>
+      <div class="match-header-note">GIANTX ban Haven; PCIFIC pick Lotus; Ascent remains</div>
+      <div class="vm-stats-game" data-game-id="268077">
+        <div class="vm-stats-game-header">
+          <div class="team"><div class="score">13</div></div>
+          <div class="map"><span>Lotus <span class="picked">PICK</span></span></div>
+          <div class="team mod-right"><div class="score">9</div></div>
+        </div>
+        {overview_stats()}
       </div>
     """
 
@@ -246,6 +292,20 @@ class VlrPipelineTests(unittest.TestCase):
         self.assertEqual(rows[0]["map_pick_type"], "pick")
         self.assertEqual(rows[0]["map_veto_order"], 2)
         self.assertFalse(any(row["player"].startswith("aggregate") for row in rows))
+
+    def test_match_parser_supports_current_overview_rows(self):
+        rows = parse_match_page(
+            FakeSession(overview_match_html()),
+            "https://www.vlr.gg/673541/pcific-esports-vs-giantx-event",
+        )
+
+        self.assertEqual(len(rows), 10)
+        self.assertEqual(rows[0]["player"], "new-a0")
+        self.assertEqual(rows[0]["player_id"], 100)
+        self.assertEqual(rows[0]["agents"], "Viper")
+        self.assertEqual(rows[0]["vlr_rating"], 1.2)
+        self.assertEqual(rows[0]["map_team_score"], 13)
+        self.assertEqual(rows[-1]["map_opp_score"], 13)
 
     def test_vlrggapi_payload_normalizes_veto_and_map_metadata(self):
         payload = {

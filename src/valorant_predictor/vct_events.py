@@ -278,6 +278,7 @@ def annotate_vct_matches(
             "event_series": values.get("event_series", ""),
             "event_stage": values.get("event_series", ""),
             "event_tier": tier,
+            "event_region": values.get("league", ""),
             "is_lan": infer_is_lan(values["event_name"]),
             "match_importance": infer_match_importance(
                 values["event_name"], values.get("event_series", "")

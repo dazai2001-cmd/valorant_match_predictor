@@ -5,6 +5,7 @@
   const radios = [...document.querySelectorAll('input[name="best_of"]')];
   const slots = [...picker.querySelectorAll("[data-map-slot]")];
   const selects = [...picker.querySelectorAll("[data-map-select]")];
+  const pickSelects = [...picker.querySelectorAll("[data-map-pick]")];
   const autoButton = picker.querySelector("[data-map-auto]");
 
   const selectedBestOf = () => {
@@ -26,20 +27,30 @@
     slots.forEach((slot) => {
       const active = Number(slot.dataset.mapSlot) <= bestOf;
       slot.hidden = !active;
-      const select = slot.querySelector("select");
-      select.disabled = !active;
-      if (!active) select.value = "";
+      const slotSelects = [...slot.querySelectorAll("select")];
+      slotSelects.forEach((select) => {
+        select.disabled = !active;
+        if (!active) select.value = "";
+      });
+    });
+    pickSelects.forEach((pickSelect, index) => {
+      const mapSelected = Boolean(selects[index]?.value);
+      pickSelect.disabled = pickSelect.closest("[data-map-slot]")?.hidden || !mapSelected;
+      if (!mapSelected) pickSelect.value = "";
     });
     syncUniqueOptions();
   };
 
   radios.forEach((radio) => radio.addEventListener("change", syncSlots));
-  selects.forEach((select) => select.addEventListener("change", syncUniqueOptions));
+  selects.forEach((select) => select.addEventListener("change", syncSlots));
   autoButton?.addEventListener("click", () => {
     selects.forEach((select) => {
       select.value = "";
     });
-    syncUniqueOptions();
+    pickSelects.forEach((select) => {
+      select.value = "";
+    });
+    syncSlots();
   });
 
   syncSlots();

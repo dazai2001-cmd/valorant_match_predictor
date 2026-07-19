@@ -41,6 +41,7 @@ PREDICTIONS_CSV = DATA_DIR / "predicted_player_ratings.csv"
 MATCH_PREDICTION_CSV = DATA_DIR / "match_prediction.csv"
 DATABASE_PATH = DATA_DIR / "valorant_predictor.sqlite3"
 VCT_EVENTS_CSV = DATA_DIR / "vct_events.csv"
+DATA_QUALITY_PATH = ARTIFACTS_DIR / "data_quality.json"
 JOB_STATUS_PATH = DATA_DIR / "job_status.json"
 
 PLAYER_MODEL_PATH = MODELS_DIR / "player_rating_model.pkl"

@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Valorant Match Predictor</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='model-jobs-v1') }}">
-  <script defer src="{{ url_for('static', filename='app.js', v='model-jobs-v1') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='quality-models-v2') }}">
+  <script defer src="{{ url_for('static', filename='app.js', v='quality-models-v2') }}"></script>
 </head>
 <body>
   <main class="app-shell">
@@ -64,15 +64,26 @@
           </div>
           <div class="map-select-grid">
             {% for index in range(1, 6) %}
-              <label data-map-slot="{{ index }}" {% if index > selected.best_of|int %}hidden{% endif %}>
-                Map {{ index }}
-                <select name="map_{{ index }}" data-map-select>
-                  <option value="">Auto</option>
-                  {% for map_name in map_options %}
-                    <option value="{{ map_name }}" {% if selected.maps[index - 1] == map_name %}selected{% endif %}>{{ map_name }}</option>
-                  {% endfor %}
-                </select>
-              </label>
+              <div class="map-slot" data-map-slot="{{ index }}" {% if index > selected.best_of|int %}hidden{% endif %}>
+                <label>
+                  Map {{ index }}
+                  <select name="map_{{ index }}" data-map-select>
+                    <option value="">Auto</option>
+                    {% for map_name in map_options %}
+                      <option value="{{ map_name }}" {% if selected.maps[index - 1] == map_name %}selected{% endif %}>{{ map_name }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label>
+                  Veto role
+                  <select name="map_pick_{{ index }}" data-map-pick>
+                    <option value="" {% if not selected.map_picks[index - 1] %}selected{% endif %}>Auto</option>
+                    <option value="team1" {% if selected.map_picks[index - 1] == "team1" %}selected{% endif %}>Team 1 pick</option>
+                    <option value="team2" {% if selected.map_picks[index - 1] == "team2" %}selected{% endif %}>Team 2 pick</option>
+                    <option value="decider" {% if selected.map_picks[index - 1] == "decider" %}selected{% endif %}>Decider</option>
+                  </select>
+                </label>
+              </div>
             {% endfor %}
           </div>
         </div>
@@ -178,7 +189,8 @@
                     <th>Map</th>
                     <th>{{ display.summary.team1 }}</th>
                     <th>{{ display.summary.team2 }}</th>
-                    <th>Pick</th>
+                    <th>Veto role</th>
+                    <th>Winner</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -189,6 +201,7 @@
                         <td>{{ map_name }}</td>
                         <td>{{ "%.1f"|format((display.summary.get("map_" ~ index ~ "_team1_win_probability") or 0) * 100) }}%</td>
                         <td>{{ "%.1f"|format((display.summary.get("map_" ~ index ~ "_team2_win_probability") or 0) * 100) }}%</td>
+                        <td>{{ display.summary.get("map_" ~ index ~ "_pick_owner", "Auto") }}</td>
                         <td><strong>{{ display.summary.get("map_" ~ index ~ "_predicted_winner") }}</strong></td>
                       </tr>
                     {% endif %}
@@ -293,6 +306,29 @@
           </div>
         </div>
 
+        {% if data_quality and data_quality.get("source") %}
+          {% set source_quality = data_quality.get("source", {}) %}
+          {% set training_quality = data_quality.get("training", {}) %}
+          <div class="training-output">
+            <div>
+              <span>Training-ready matches</span>
+              <strong>{{ training_quality.get("training_ready_matches", 0) }}</strong>
+            </div>
+            <div>
+              <span>Player ID coverage</span>
+              <strong>{{ "%.0f"|format((source_quality.get("player_id_coverage", 0) or 0) * 100) }}%</strong>
+            </div>
+            <div>
+              <span>Event metadata</span>
+              <strong>{{ "%.0f"|format((source_quality.get("event_metadata_coverage", 0) or 0) * 100) }}%</strong>
+            </div>
+            <div>
+              <span>Veto coverage</span>
+              <strong>{{ "%.0f"|format((source_quality.get("map_pick_coverage", 0) or 0) * 100) }}%</strong>
+            </div>
+          </div>
+        {% endif %}
+
         <form class="model-control-form" method="post">
           <div class="model-select-grid">
             {% for task, label in [("player", "Player rating"), ("team", "Match winner"), ("map", "Map winner")] %}
@@ -376,13 +412,14 @@
                 </div>
                 <small class="model-report-meta">
                   {{ report.test_rows or 0 }} test rows{% if report.test_matches %} across {{ report.test_matches }} matches{% endif %}
-                  {% if report.skill_vs_baseline is not none %} / MAE skill vs last-10: {{ "%+.1f"|format(report.skill_vs_baseline * 100) }}%{% endif %}
+                  {% if report.skill_vs_baseline is not none %} / MAE skill vs hierarchical form: {{ "%+.1f"|format(report.skill_vs_baseline * 100) }}%{% endif %}
                   {% if report.interval_coverage is not none %} / 80% interval coverage: {{ "%.1f"|format(report.interval_coverage * 100) }}%{% endif %}
                   {% if report.brier_score is not none %} / Test Brier: {{ "%.4f"|format(report.brier_score) }}{% endif %}
                   {% if report.reliability is not none %} / Measured reliability: {{ "%.1f"|format(report.reliability * 100) }}%{% endif %}
                   {% if report.model_blend_weight is not none %} / Learner blend: {{ "%.0f"|format(report.model_blend_weight * 100) }}%{% endif %}
                   {% if report.max_model_delta is not none %} / Raw delta cap: +/-{{ "%.0f"|format(report.max_model_delta * 100) }} points{% endif %}
                   {% if report.candidate_rejected %} / Validation winner failed the later test; baseline is active{% endif %}
+                  {% if report.rolling_folds %} / Rolling windows won: {{ report.rolling_wins or 0 }}/{{ report.rolling_folds }}{% endif %}
                   {% if report.selection_mode == "manual" and not report.passed_safeguard %} / Manual override is active despite missing the safeguard{% endif %}
                 </small>
               </section>

@@ -4,12 +4,13 @@ from datetime import datetime
 import pandas as pd
 
 from ..config import MATCHES_CSV, NEWS_CSV, PREDICTIONS_CSV, ROSTERS_CSV
+from ..data_quality import enrich_match_metadata, filter_training_ready_matches
 from ..features.form_calculations import build_player_profiles as build_form_profiles
 from ..features.form_calculations import build_player_profiles_from_rosters
 from ..features.form_calculations import clean_match_data
 from ..features.form_calculations import filter_curated_competition_history
 from ..features.news_impact import player_news_adjustments
-from ..team_registry import filter_registry_tier1_matchups, registry_team_pages
+from ..team_registry import filter_registry_tier1_matchups, load_team_registry, registry_team_pages
 from ..training.model_inference import apply_player_model
 from ..vlr_client import canonicalize_match_dataframe, scrape_matches, scrape_news, scrape_rosters
 
@@ -181,15 +182,24 @@ def predict_player_ratings(
     recent_days: int | None = None,
     use_trained_models: bool = False,
     prepared_matches: pd.DataFrame | None = None,
+    selected_maps: list[str] | None = None,
+    dataset_fingerprint_value: str = "",
 ) -> pd.DataFrame:
     if prepared_matches is None:
         raw_matches = canonicalize_match_dataframe(
             load_csv(matches_csv),
             registry_team_pages(season_year=None),
         )
+        raw_matches = enrich_match_metadata(
+            raw_matches,
+            registry=load_team_registry(),
+            rosters=load_csv(rosters_csv),
+        )
         matches = clean_matches(
-            filter_registry_tier1_matchups(
-                filter_curated_competition_history(raw_matches)
+            filter_training_ready_matches(
+                filter_registry_tier1_matchups(
+                    filter_curated_competition_history(raw_matches)
+                )
             )
         )
         if season_year is not None and matches["match_date_sort"].notna().any():
@@ -210,7 +220,14 @@ def predict_player_ratings(
         raise ValueError("No players found for those teams in the match CSV.")
 
     if use_trained_models:
-        profiles = apply_player_model(profiles, matches, team1, team2)
+        profiles = apply_player_model(
+            profiles,
+            matches,
+            team1,
+            team2,
+            selected_maps=selected_maps,
+            dataset_fingerprint_value=dataset_fingerprint_value,
+        )
 
     news = load_csv(news_csv)
     predictions = apply_news(profiles, news, recent_news_days)

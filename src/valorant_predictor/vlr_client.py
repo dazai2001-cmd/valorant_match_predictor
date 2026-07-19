@@ -1,4 +1,5 @@
 import argparse
+import json
 import re
 import time
 import unicodedata
@@ -13,6 +14,12 @@ from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from .data_quality import (
+    classify_event_tier,
+    enrich_match_metadata,
+    estimated_patch_epoch,
+    infer_event_region,
+)
 from .config import (
     BASE_URL,
     MATCH_COVERAGE_CSV,
@@ -44,8 +51,10 @@ MATCH_COLUMNS = [
     "event_series",
     "event_stage",
     "event_tier",
+    "event_region",
     "is_lan",
     "patch",
+    "patch_source",
     "map_veto",
     "match_importance",
     "competition_tier",
@@ -65,8 +74,10 @@ MATCH_COLUMNS = [
     "stat_scope",
     "team",
     "team_id",
+    "team_region",
     "opponent",
     "opponent_id",
+    "opponent_region",
     "winner",
     "winner_id",
     "player",
@@ -124,14 +135,7 @@ TEAM_NAME_ALIASES = {
 
 
 def infer_event_tier(event_name: str) -> str:
-    text = str(event_name or "").lower()
-    if any(token in text for token in ["valorant champions", "masters", "vct ", "esports world cup"]):
-        return "tier1"
-    if "challengers" in text:
-        return "tier2"
-    if "game changers" in text:
-        return "game_changers"
-    return "unknown"
+    return classify_event_tier(event_name)
 
 
 def infer_match_importance(event_name: str, event_stage: str) -> float:
@@ -396,6 +400,7 @@ def normalize_match_dataframe(
     output["map_data_source"] = (
         output["map_data_source"].fillna("").astype(str).str.strip().replace("", "legacy")
     )
+    output = enrich_match_metadata(output)
 
     scope = output["stat_scope"].fillna("").astype(str).str.strip().str.lower()
     output["stat_scope"] = scope.where(scope != "", output["map_id"].notna().map({True: "map", False: "legacy"}))
@@ -461,8 +466,41 @@ def complete_match_ids(matches: pd.DataFrame) -> set[int]:
     ].copy()
     if scoped.empty:
         return set()
-    counts = scoped.groupby("match_id").size()
-    return {int(match_id) for match_id, count in counts.items() if count >= 10}
+    scoped["_player_id_known"] = pd.to_numeric(
+        scoped["player_id"],
+        errors="coerce",
+    ).notna()
+    scoped["_event_known"] = (
+        scoped["event_name"].fillna("").astype(str).str.strip().ne("")
+    )
+    scoped["_team_score_known"] = pd.to_numeric(
+        scoped["map_team_score"],
+        errors="coerce",
+    ).notna()
+    scoped["_opponent_score_known"] = pd.to_numeric(
+        scoped["map_opp_score"],
+        errors="coerce",
+    ).notna()
+    scoped["_veto_known"] = (
+        scoped["map_veto"].fillna("").astype(str).str.strip().ne("")
+    )
+    summary = scoped.groupby("match_id", sort=False).agg(
+        rows=("match_id", "size"),
+        player_id_coverage=("_player_id_known", "mean"),
+        event_known=("_event_known", "max"),
+        team_score_known=("_team_score_known", "max"),
+        opponent_score_known=("_opponent_score_known", "max"),
+        veto_known=("_veto_known", "max"),
+    )
+    complete = summary[
+        summary["rows"].ge(10)
+        & summary["player_id_coverage"].ge(0.8)
+        & summary["event_known"]
+        & summary["team_score_known"]
+        & summary["opponent_score_known"]
+        & summary["veto_known"]
+    ]
+    return {int(match_id) for match_id in complete.index}
 
 
 def _unique_match_count(matches: pd.DataFrame) -> int:
@@ -733,6 +771,73 @@ def _parse_player_row(
         return None
 
 
+def _parse_overview_player_row(
+    row,
+    teams: tuple[str, str],
+    team_ids: tuple[int | None, int | None],
+    url: str,
+    winner: str | None,
+    winner_id: int | None,
+    row_team: str | None = None,
+) -> dict | None:
+    try:
+        player_link = row.select_one(".ovw-cell.mod-player a[href*='/player/']")
+        if player_link is None or row_team not in teams:
+            return None
+        player_name = player_link.select_one(".ovw-player-name")
+        player = (
+            player_name.get_text(strip=True)
+            if player_name
+            else list(player_link.stripped_strings)[0]
+        )
+        player_id = _player_id_from_href(player_link.get("href", ""))
+        row_team_index = 0 if row_team == teams[0] else 1
+        opponent_index = 1 - row_team_index
+
+        rating_cell = row.select_one(".ovw-cell[data-col='rating2']")
+        acs_cell = row.select_one(".ovw-cell[data-col='acs']")
+        kills_cell = row.select_one(".ovw-kda-stat[data-col='kills']")
+        deaths_cell = row.select_one(".ovw-kda-stat[data-col='deaths']")
+        assists_cell = row.select_one(".ovw-kda-stat[data-col='assists']")
+        if not all([rating_cell, acs_cell, kills_cell, deaths_cell, assists_cell]):
+            return None
+
+        vlr_rating = _first_number(rating_cell)
+        acs = _first_number(acs_cell)
+        kills = _first_number(kills_cell)
+        deaths = _first_number(deaths_cell)
+        assists = _first_number(assists_cell)
+        if acs is None or kills is None or deaths is None:
+            return None
+
+        agents = [
+            str(image.get("title") or image.get("alt") or "").strip()
+            for image in row.select(".ovw-agents img")
+            if str(image.get("title") or image.get("alt") or "").strip()
+        ]
+        return {
+            "match_url": url,
+            "team": row_team,
+            "team_id": team_ids[row_team_index],
+            "opponent": teams[opponent_index],
+            "opponent_id": team_ids[opponent_index],
+            "winner": winner,
+            "winner_id": winner_id,
+            "player": player,
+            "player_id": player_id,
+            "agents": ";".join(agents),
+            "vlr_rating": vlr_rating,
+            "acs": acs,
+            "kills": int(kills),
+            "deaths": int(deaths),
+            "assists": int(assists or 0),
+            "is_winner": row_team == winner if winner else None,
+            "scraped_at": datetime.utcnow().isoformat(timespec="seconds"),
+        }
+    except (IndexError, TypeError, ValueError):
+        return None
+
+
 def parse_match_page(session: requests.Session, url: str) -> list[dict]:
     soup = get_soup(session, url)
     team_nodes = soup.select(".match-header .wf-title-med")
@@ -762,12 +867,14 @@ def parse_match_page(session: requests.Session, url: str) -> list[dict]:
     event_series = event_series_node.get_text(" ", strip=True) if event_series_node else ""
     event_stage = event_series.split(":", 1)[-1].strip() if event_series else ""
     event_tier = infer_event_tier(event_name)
+    event_region = infer_event_region(event_name, event_series)
     is_lan = infer_is_lan(event_name)
     match_importance = infer_match_importance(event_name, event_stage)
     veto_node = soup.select_one(".match-header-note")
     map_veto = veto_node.get_text(" ", strip=True) if veto_node else ""
     veto_maps = map_metadata_from_veto(map_veto, teams)
     score1, score2 = _score_from_header(soup)
+    patch = estimated_patch_epoch(match_date)
     winner = None
     winner_id = None
     if score1 is not None and score2 is not None and score1 != score2:
@@ -782,7 +889,25 @@ def parse_match_page(session: requests.Session, url: str) -> list[dict]:
             continue
 
         tables = game.select("table.wf-table-inset")
-        if len(tables) < 2:
+        row_groups = []
+        if len(tables) >= 2:
+            row_groups = [
+                (teams[table_index], table.select("tbody tr"), _parse_player_row)
+                for table_index, table in enumerate(tables[:2])
+            ]
+        else:
+            overview_rows = [
+                row
+                for row in game.select(".ovw-table .ovw-row")
+                if row.select_one(".ovw-cell.mod-player a[href*='/player/']")
+            ]
+            if len(overview_rows) >= 10 and len(overview_rows) % 2 == 0:
+                midpoint = len(overview_rows) // 2
+                row_groups = [
+                    (teams[0], overview_rows[:midpoint], _parse_overview_player_row),
+                    (teams[1], overview_rows[midpoint:], _parse_overview_player_row),
+                ]
+        if len(row_groups) < 2:
             continue
 
         map_number += 1
@@ -803,10 +928,9 @@ def parse_match_page(session: requests.Session, url: str) -> list[dict]:
         map_score1 = int(map_scores[0]) if len(map_scores) > 0 and map_scores[0] is not None else None
         map_score2 = int(map_scores[1]) if len(map_scores) > 1 and map_scores[1] is not None else None
 
-        for table_index, table in enumerate(tables[:2]):
-            row_team = teams[table_index]
-            for row in table.select("tbody tr"):
-                parsed = _parse_player_row(
+        for row_team, player_rows, row_parser in row_groups:
+            for row in player_rows:
+                parsed = row_parser(
                     row,
                     teams,
                     ids,
@@ -831,8 +955,10 @@ def parse_match_page(session: requests.Session, url: str) -> list[dict]:
                             "event_series": event_series,
                             "event_stage": event_stage,
                             "event_tier": event_tier,
+                            "event_region": event_region,
                             "is_lan": is_lan,
-                            "patch": "",
+                            "patch": patch,
+                            "patch_source": "date_epoch" if patch else "",
                             "map_veto": map_veto,
                             "match_importance": match_importance,
                             "competition_tier": event_tier,
@@ -852,6 +978,8 @@ def parse_match_page(session: requests.Session, url: str) -> list[dict]:
                             "stat_scope": "map",
                             "team_score": score1 if is_first_team else score2,
                             "opp_score": score2 if is_first_team else score1,
+                            "team_region": "",
+                            "opponent_region": "",
                             "map_team_score": map_score1 if is_first_team else map_score2,
                             "map_opp_score": map_score2 if is_first_team else map_score1,
                         }
@@ -958,6 +1086,123 @@ def scrape_upcoming_matches(
 
     sync_dataframe("upcoming_matches", upcoming, source=str(output_csv))
     return upcoming
+
+
+def enrich_incomplete_match_history(
+    output_csv: str = MATCHES_CSV,
+    team_pages: dict[str, str] | None = None,
+    season_year: int | None = None,
+    max_matches: int | None = 100,
+    pause_seconds: float = 0.35,
+    progress=None,
+    vlrggapi_base_url: str = VLRGGAPI_BASE_URL,
+) -> tuple[pd.DataFrame, dict]:
+    pages = team_pages or TEAM_PAGES
+    try:
+        existing_raw = pd.read_csv(output_csv, low_memory=False)
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        return pd.DataFrame(columns=MATCH_COLUMNS), {"candidates": 0, "refreshed": 0, "failed": 0}
+
+    existing = normalize_match_dataframe(existing_raw, pages)
+    if existing.empty:
+        return existing, {"candidates": 0, "refreshed": 0, "failed": 0}
+
+    candidate_rows = existing.copy()
+    candidate_rows["_date"] = pd.to_datetime(
+        candidate_rows["match_date"],
+        utc=True,
+        errors="coerce",
+    )
+    candidate_rows["_player_id_known"] = pd.to_numeric(
+        candidate_rows["player_id"],
+        errors="coerce",
+    ).notna()
+    candidate_rows["_event_known"] = (
+        candidate_rows["event_name"].fillna("").astype(str).str.strip().ne("")
+    )
+    candidate_rows["_veto_known"] = (
+        candidate_rows["map_veto"].fillna("").astype(str).str.strip().ne("")
+    )
+    candidate_summary = candidate_rows.groupby("match_id", sort=False).agg(
+        latest_date=("_date", "max"),
+        player_id_coverage=("_player_id_known", "mean"),
+        event_known=("_event_known", "max"),
+        veto_known=("_veto_known", "max"),
+        match_url=("match_url", "first"),
+    )
+    if season_year is not None:
+        candidate_summary = candidate_summary[
+            candidate_summary["latest_date"].dt.year.eq(int(season_year))
+        ]
+    candidate_summary = candidate_summary[
+        candidate_summary["player_id_coverage"].lt(0.8)
+        | ~candidate_summary["event_known"]
+        | ~candidate_summary["veto_known"]
+    ]
+    candidates = [
+        (row.latest_date, int(match_id), canonical_match_url(row.match_url))
+        for match_id, row in candidate_summary.iterrows()
+    ]
+
+    oldest = pd.Timestamp("1900-01-01", tz="UTC")
+    candidates.sort(
+        key=lambda item: (oldest if pd.isna(item[0]) else item[0], item[1]),
+        reverse=True,
+    )
+    total_candidates = len(candidates)
+    if max_matches is not None:
+        candidates = candidates[: max(0, int(max_matches))]
+
+    session = make_session()
+    api_available = bool(
+        vlrggapi_base_url and vlrggapi_is_healthy(session, vlrggapi_base_url)
+    )
+    records = []
+    failures = []
+    for index, (_, match_id, url) in enumerate(candidates, start=1):
+        if progress:
+            progress("metadata_backfill", index - 1, len(candidates), f"Enriching match {match_id}")
+        try:
+            parsed = parse_match_page(session, url)
+            if parsed and api_available:
+                try:
+                    metadata = fetch_vlrggapi_match_metadata(
+                        session,
+                        vlrggapi_base_url,
+                        match_id,
+                    )
+                    parsed = enrich_match_records_with_map_metadata(parsed, metadata)
+                except (requests.RequestException, TypeError, ValueError):
+                    pass
+            if parsed:
+                records.extend(parsed)
+            else:
+                failures.append({"match_id": match_id, "error": "No player-map rows"})
+        except (requests.RequestException, TypeError, ValueError) as exc:
+            failures.append({"match_id": match_id, "error": str(exc)})
+        if pause_seconds:
+            time.sleep(pause_seconds)
+
+    incoming = pd.DataFrame(canonicalize_match_records(records, pages), columns=MATCH_COLUMNS)
+    incoming = normalize_match_dataframe(incoming, pages)
+    merged = merge_match_history(existing, incoming, pages)
+    Path(output_csv).parent.mkdir(parents=True, exist_ok=True)
+    merged.to_csv(output_csv, index=False)
+    from .storage import sync_match_data
+
+    sync_match_data(merged, source=str(output_csv))
+    if progress:
+        progress("metadata_backfill", len(candidates), len(candidates), "Match metadata enrichment complete")
+    refreshed = int(incoming["match_id"].nunique()) if not incoming.empty else 0
+    summary = {
+        "candidates": total_candidates,
+        "attempted": len(candidates),
+        "refreshed": refreshed,
+        "failed": len(failures),
+        "remaining": max(0, total_candidates - refreshed),
+        "failures": failures[:20],
+    }
+    return merged, summary
 
 
 def scrape_matches(
@@ -1192,6 +1437,11 @@ def main() -> None:
     parser.add_argument("--rosters", action="store_true", help="Scrape current VLR team rosters.")
     parser.add_argument("--upcoming", action="store_true", help="Scrape upcoming Tier 1 matches from VLR.")
     parser.add_argument(
+        "--enrich-history",
+        action="store_true",
+        help="Refresh stored matches missing player IDs, event metadata, or veto data.",
+    )
+    parser.add_argument(
         "--limit-per-team",
         type=int,
         default=0,
@@ -1199,6 +1449,8 @@ def main() -> None:
     )
     parser.add_argument("--min-matches-per-team", type=int, default=20)
     parser.add_argument("--news-pages", type=int, default=3)
+    parser.add_argument("--max-matches", type=int, default=0, help="Optional cap for --enrich-history; 0 means all candidates.")
+    parser.add_argument("--pause-seconds", type=float, default=0.35)
     parser.add_argument("--season-year", type=int, help="Coverage year; also filters output when --save-filtered is used.")
     parser.add_argument("--recent-days", type=int, help="Optional recency filter when --save-filtered is used.")
     parser.add_argument("--save-filtered", action="store_true", help="Write only the selected year/recency window instead of raw latest matches.")
@@ -1209,10 +1461,16 @@ def main() -> None:
         default=VLRGGAPI_BASE_URL,
         help="Optional self-hosted vlrggapi base URL for map/veto enrichment.",
     )
+    parser.add_argument(
+        "--no-vlrggapi",
+        action="store_true",
+        help="Skip the optional local vlrggapi health check and use direct VLR parsing.",
+    )
     args = parser.parse_args()
+    vlrggapi_base_url = "" if args.no_vlrggapi else args.vlrggapi_base_url
 
-    if not args.matches and not args.news and not args.rosters and not args.upcoming:
-        parser.error("Choose --matches, --news, --rosters, --upcoming, or a combination.")
+    if not args.matches and not args.news and not args.rosters and not args.upcoming and not args.enrich_history:
+        parser.error("Choose --matches, --news, --rosters, --upcoming, --enrich-history, or a combination.")
 
     if args.matches:
         df = scrape_matches(
@@ -1223,7 +1481,7 @@ def main() -> None:
             save_filtered=args.save_filtered,
             preserve_history=not args.replace_history,
             refresh_existing=args.refresh_existing,
-            vlrggapi_base_url=args.vlrggapi_base_url,
+            vlrggapi_base_url=vlrggapi_base_url,
         )
         print(f"Saved {len(df)} match stat rows to {MATCHES_CSV}")
     if args.news:
@@ -1235,6 +1493,19 @@ def main() -> None:
     if args.upcoming:
         df = scrape_upcoming_matches()
         print(f"Saved {len(df)} upcoming Tier 1 matches to {UPCOMING_MATCHES_CSV}")
+    if args.enrich_history:
+        df, summary = enrich_incomplete_match_history(
+            season_year=args.season_year,
+            max_matches=args.max_matches or None,
+            pause_seconds=max(0.0, args.pause_seconds),
+            progress=lambda step, current, total, message: print(
+                f"[{step}] {current}/{total} {message}",
+                flush=True,
+            ),
+            vlrggapi_base_url=vlrggapi_base_url,
+        )
+        print(json.dumps(summary, indent=2))
+        print(f"Saved {len(df)} enriched match stat rows to {MATCHES_CSV}")
 
 
 if __name__ == "__main__":

@@ -32,14 +32,21 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from ..config import (
+    DATA_QUALITY_PATH,
     MATCH_COVERAGE_CSV,
     MATCHES_CSV,
     MAP_MODEL_PATH,
     MODELS_DIR,
     NEWS_CSV,
     PLAYER_MODEL_PATH,
+    ROSTERS_CSV,
     TEAM_MODEL_PATH,
     TRAINING_METRICS_PATH,
+)
+from ..data_quality import (
+    data_quality_report,
+    enrich_match_metadata,
+    filter_training_ready_matches,
 )
 from ..features.form_calculations import (
     clean_match_data,
@@ -51,6 +58,7 @@ from ..features.form_calculations import (
     weighted_recent_mean,
 )
 from ..features.team_context import (
+    MAX_MAP_SPECIFIC_WEIGHT,
     SEQUENTIAL_TEAM_FEATURES,
     build_sequential_team_context,
     freeze_team_state,
@@ -61,13 +69,17 @@ from ..model_selection import (
     save_model_selection,
     selected_candidate as resolve_selected_candidate,
 )
-from ..team_registry import filter_registry_tier1_matchups, registry_team_pages
+from ..team_registry import (
+    filter_registry_tier1_matchups,
+    load_team_registry,
+    registry_team_pages,
+)
 from ..vlr_client import canonicalize_match_dataframe, match_coverage_report, scrape_matches
 
 
 MODEL_DIR = MODELS_DIR
 METRICS_PATH = TRAINING_METRICS_PATH
-MODEL_VERSION = "logic-v12-capped-blend-calibration"
+MODEL_VERSION = "logic-v14-team-anchored-map-hierarchy"
 TRAINING_HALF_LIFE_DAYS = 365.0
 
 PLAYER_FEATURES = [
@@ -76,6 +88,9 @@ PLAYER_FEATURES = [
     "player_last_10_rating",
     "player_60d_rating",
     "player_overall_rating",
+    "player_shrunk_rating",
+    "player_map_rating",
+    "player_map_maps",
     "player_rating_trend",
     "player_recent_acs",
     "player_recent_kd",
@@ -93,6 +108,11 @@ PLAYER_FEATURES = [
     "opponent_recent_win_rate",
     "player_vs_opponent_rating",
     "player_vs_opponent_maps",
+    "team_elo_advantage",
+    "region_elo_advantage",
+    "strength_of_schedule_diff",
+    "lineup_rating_diff",
+    "map_pool_elo_diff",
 ]
 
 TEAM_FEATURES = [
@@ -109,7 +129,13 @@ TEAM_FEATURES = [
 
 MAP_CONTEXT_FEATURES = [
     "map_number",
+    "map_team_anchor_probability",
     "map_baseline_probability",
+    "map_signal_probability",
+    "map_specific_probability_delta",
+    "map_history_reliability",
+    "map_team_history_games",
+    "map_opponent_history_games",
     "map_pick_by_team",
     "map_pick_by_opponent",
     "map_is_decider",
@@ -212,6 +238,9 @@ def rating_stats(history: pd.DataFrame, target: pd.Series, recent_days: int) -> 
             "last_10_rating": 1.0,
             "recent_days_rating": 1.0,
             "overall_rating": 1.0,
+            "shrunk_rating": 1.0,
+            "map_rating": 1.0,
+            "map_maps": 0,
             "rating_trend": 0.0,
             "recent_acs": 200.0,
             "recent_kd": 1.0,
@@ -311,6 +340,32 @@ def rating_stats_from_ordered(history: pd.DataFrame, target: pd.Series, recent_d
         for agent in value.split(";")
         if agent.strip()
     }
+    freshness = math.exp(-days_since_last_match / 45.0)
+    blended_rating = (
+        0.45 * _weighted_array(ratings[-5:])
+        + 0.35 * _weighted_array(recent_ratings)
+        + 0.20 * float(np.nanmean(ratings))
+    )
+    shrink_reliability = (
+        effective_maps / (effective_maps + 8.0) * freshness
+        if effective_maps > 0
+        else 0.0
+    )
+    shrunk_rating = 1.0 + shrink_reliability * (blended_rating - 1.0)
+
+    target_map = normalize_map_name(target.get("map_name", ""))
+    if target_map and "map_name" in history.columns:
+        normalized_history_maps = history["map_name"].map(normalize_map_name)
+        map_history = history[normalized_history_maps == target_map].tail(20)
+    else:
+        map_history = history.iloc[:0]
+    map_maps = len(map_history)
+    if map_maps:
+        map_raw_rating = _weighted_array(map_history["rating_for_model"].to_numpy(dtype=float))
+        map_reliability = map_maps / (map_maps + 6.0)
+        map_rating = shrunk_rating + map_reliability * (map_raw_rating - shrunk_rating)
+    else:
+        map_rating = shrunk_rating
 
     return {
         "last_3_rating": last_3,
@@ -318,6 +373,9 @@ def rating_stats_from_ordered(history: pd.DataFrame, target: pd.Series, recent_d
         "last_10_rating": last_10,
         "recent_days_rating": _weighted_array(recent_ratings),
         "overall_rating": float(np.nanmean(ratings)),
+        "shrunk_rating": shrunk_rating,
+        "map_rating": map_rating,
+        "map_maps": map_maps,
         "rating_trend": last_3 - last_10,
         "recent_acs": float(np.nanmean(recent["acs"].to_numpy(dtype=float))),
         "recent_kd": float(np.nanmean(recent["kills"].to_numpy(dtype=float) / recent_deaths)),
@@ -326,52 +384,75 @@ def rating_stats_from_ordered(history: pd.DataFrame, target: pd.Series, recent_d
         "recent_days_maps": len(recent),
         "effective_maps": effective_maps,
         "days_since_last_match": days_since_last_match,
-        "freshness": math.exp(-days_since_last_match / 45.0),
+        "freshness": freshness,
         "rating_std": rating_std,
         "agent_pool_size": len(agents),
     }
 
 
 def team_rows_from_cleaned(cleaned: pd.DataFrame) -> pd.DataFrame:
-    rows = []
-    for (match_key, team), group in cleaned.groupby(["match_key", "team"], sort=False):
-        team_score = group["team_score"].dropna().iloc[0] if group["team_score"].notna().any() else None
-        opp_score = group["opp_score"].dropna().iloc[0] if group["opp_score"].notna().any() else None
-        opponent = group["opponent"].dropna().iloc[0] if group["opponent"].notna().any() else ""
-        def group_value(column: str, default=""):
-            if column not in group or not group[column].notna().any():
-                return default
-            return group[column].dropna().iloc[0]
-
-        rows.append(
-            {
-                "match_key": match_key,
-                "match_url": group["match_url"].dropna().iloc[0],
-                "match_id": group["match_id"].dropna().max(),
-                "match_date_sort": group["match_date_sort"].dropna().max()
-                if group["match_date_sort"].notna().any()
-                else pd.NaT,
-                "team": team,
-                "opponent": opponent,
-                "event_name": group_value("event_name"),
-                "event_series": group_value("event_series"),
-                "event_stage": group_value("event_stage"),
-                "event_tier": group_value("event_tier"),
-                "is_lan": group_value("is_lan", False),
-                "patch": group_value("patch"),
-                "match_importance": float(group_value("match_importance", 1.0) or 1.0),
-                "competition_tier": group_value("competition_tier", "unknown"),
-                "competition_strength_weight": float(
-                    group_value("competition_strength_weight", 1.0) or 1.0
-                ),
-                "team_avg_rating": group["rating_for_model"].mean(),
-                "team_win": group["is_winner"].astype(float).max(),
-                "score_margin": float(team_score - opp_score)
-                if team_score is not None and opp_score is not None
-                else 0.0,
-            }
-        )
-    return chronological_sort(pd.DataFrame(rows))
+    if cleaned.empty:
+        return pd.DataFrame()
+    frame = cleaned.copy()
+    defaults = {
+        "match_url": "",
+        "match_id": pd.NA,
+        "match_date_sort": pd.NaT,
+        "opponent": "",
+        "event_name": "",
+        "event_series": "",
+        "event_stage": "",
+        "event_tier": "unknown",
+        "event_region": "",
+        "is_lan": False,
+        "patch": "",
+        "team_region": "",
+        "opponent_region": "",
+        "match_importance": 1.0,
+        "competition_tier": "unknown",
+        "competition_strength_weight": 1.0,
+        "team_score": pd.NA,
+        "opp_score": pd.NA,
+    }
+    for column, default in defaults.items():
+        if column not in frame.columns:
+            frame[column] = default
+    frame["_team_win"] = frame["is_winner"].astype(float)
+    grouped = frame.groupby(["match_key", "team"], sort=False, dropna=False)
+    output = grouped.agg(
+        match_url=("match_url", "first"),
+        match_id=("match_id", "max"),
+        match_date_sort=("match_date_sort", "max"),
+        opponent=("opponent", "first"),
+        event_name=("event_name", "first"),
+        event_series=("event_series", "first"),
+        event_stage=("event_stage", "first"),
+        event_tier=("event_tier", "first"),
+        event_region=("event_region", "first"),
+        is_lan=("is_lan", "first"),
+        patch=("patch", "first"),
+        team_region=("team_region", "first"),
+        opponent_region=("opponent_region", "first"),
+        match_importance=("match_importance", "first"),
+        competition_tier=("competition_tier", "first"),
+        competition_strength_weight=("competition_strength_weight", "first"),
+        team_avg_rating=("rating_for_model", "mean"),
+        team_win=("_team_win", "max"),
+        team_score=("team_score", "first"),
+        opp_score=("opp_score", "first"),
+    ).reset_index()
+    output["match_importance"] = pd.to_numeric(
+        output["match_importance"],
+        errors="coerce",
+    ).fillna(1.0)
+    output["competition_strength_weight"] = pd.to_numeric(
+        output["competition_strength_weight"],
+        errors="coerce",
+    ).fillna(1.0)
+    team_scores = pd.to_numeric(output.pop("team_score"), errors="coerce")
+    opponent_scores = pd.to_numeric(output.pop("opp_score"), errors="coerce")
+    output["score_margin"] = (team_scores - opponent_scores).fillna(0.0)
+    return chronological_sort(output)
 
 
 def team_history_features(
@@ -451,6 +532,11 @@ def build_player_training_data(
         return pd.DataFrame()
 
     team_maps = team_rows_from_cleaned(cleaned)
+    sequential_context, _ = build_sequential_team_context(cleaned, team_maps)
+    sequential_lookup = {
+        (row["match_key"], row["team"], row["opponent"]): row
+        for row in sequential_context.to_dict("records")
+    }
     context_cache = {}
     contexts = targets[
         ["match_key", "match_date_sort", "match_id", "team", "opponent"]
@@ -474,7 +560,11 @@ def build_player_training_data(
         player_rows = cleaned[cleaned["player_norm"] == player_norm]
         player_feature_cache = {}
         for _, target in player_targets.iterrows():
-            cache_key = (target["match_key"], target["opponent"])
+            cache_key = (
+                target["match_key"],
+                target["opponent"],
+                normalize_map_name(target.get("map_name", "")),
+            )
             if cache_key not in player_feature_cache:
                 player_history = history_before(player_rows, target)
                 if len(player_history) < 1:
@@ -492,6 +582,10 @@ def build_player_training_data(
             team_stats, opponent_stats = context_cache[
                 (target["match_key"], target["team"], target["opponent"])
             ]
+            sequential = sequential_lookup.get(
+                (target["match_key"], target["team"], target["opponent"]),
+                {},
+            )
 
             rows.append(
                 {
@@ -512,6 +606,9 @@ def build_player_training_data(
                     "player_last_10_rating": player_stats["last_10_rating"],
                     "player_60d_rating": player_stats["recent_days_rating"],
                     "player_overall_rating": player_stats["overall_rating"],
+                    "player_shrunk_rating": player_stats["shrunk_rating"],
+                    "player_map_rating": player_stats["map_rating"],
+                    "player_map_maps": player_stats["map_maps"],
                     "player_rating_trend": player_stats["rating_trend"],
                     "player_recent_acs": player_stats["recent_acs"],
                     "player_recent_kd": player_stats["recent_kd"],
@@ -531,6 +628,13 @@ def build_player_training_data(
                     if not player_vs_opp.empty
                     else player_stats["overall_rating"],
                     "player_vs_opponent_maps": len(player_vs_opp),
+                    "team_elo_advantage": float(sequential.get("elo_diff", 0.0)),
+                    "region_elo_advantage": float(sequential.get("region_elo_diff", 0.0)),
+                    "strength_of_schedule_diff": float(
+                        sequential.get("strength_of_schedule_diff", 0.0)
+                    ),
+                    "lineup_rating_diff": float(sequential.get("lineup_rating_diff", 0.0)),
+                    "map_pool_elo_diff": float(sequential.get("map_pool_elo_diff", 0.0)),
                 }
             )
 
@@ -683,7 +787,12 @@ def build_map_training_data(
         "target_match_id",
         "match_importance",
         "training_weight",
+        "elo_probability",
         "map_probabilities",
+        "map_signal_probabilities",
+        "map_reliabilities",
+        "map_team_games",
+        "map_opponent_games",
         *TEAM_FEATURES,
     ]
     context_columns = [column for column in context_columns if column in team_training.columns]
@@ -707,7 +816,43 @@ def build_map_training_data(
                 return float(value)
         return float(row.get("elo_probability", 0.5) or 0.5)
 
+    def map_context_value(row, column: str, default: float) -> float:
+        values = row.get(column)
+        if isinstance(values, dict):
+            value = values.get(row.get("map_name"))
+            if value is not None:
+                return float(value)
+        return float(default)
+
+    output["map_team_anchor_probability"] = pd.to_numeric(
+        output.get("elo_probability", pd.Series(0.5, index=output.index)),
+        errors="coerce",
+    ).fillna(0.5).clip(0.05, 0.95)
     output["map_baseline_probability"] = output.apply(baseline_probability, axis=1).clip(0.05, 0.95)
+    output["map_signal_probability"] = output.apply(
+        lambda row: map_context_value(
+            row,
+            "map_signal_probabilities",
+            row["map_team_anchor_probability"],
+        ),
+        axis=1,
+    ).clip(0.05, 0.95)
+    output["map_history_reliability"] = output.apply(
+        lambda row: map_context_value(row, "map_reliabilities", 0.0),
+        axis=1,
+    ).clip(0.0, 1.0)
+    output["map_team_history_games"] = output.apply(
+        lambda row: map_context_value(row, "map_team_games", 0.0),
+        axis=1,
+    ).clip(lower=0.0)
+    output["map_opponent_history_games"] = output.apply(
+        lambda row: map_context_value(row, "map_opponent_games", 0.0),
+        axis=1,
+    ).clip(lower=0.0)
+    output["map_specific_probability_delta"] = (
+        output["map_baseline_probability"]
+        - output["map_team_anchor_probability"]
+    )
     pick_team = output["map_pick_team"].fillna("").astype(str)
     output["map_pick_by_team"] = (pick_team == output["team"].astype(str)).astype(float)
     output["map_pick_by_opponent"] = (pick_team == output["opponent"].astype(str)).astype(float)
@@ -848,7 +993,7 @@ def train_player_model(
 
     x = training_df[PLAYER_FEATURES].fillna(0.0)
     y = training_df["target_rating"].astype(float)
-    baseline = training_df["player_last_10_rating"].astype(float).clip(0.35, 1.90)
+    baseline = training_df["player_shrunk_rating"].astype(float).clip(0.35, 1.90)
     residual_target = y - baseline
     weights = training_df.get("training_weight", pd.Series(1.0, index=training_df.index)).astype(float)
     lower_model = _new_player_model(loss="quantile", quantile=0.10)
@@ -891,9 +1036,91 @@ def train_player_model(
             }
             candidate_models[candidate_name] = candidate_model
 
+        rolling_splits = rolling_origin_splits(training_df)
+        for candidate_name in PLAYER_CANDIDATES:
+            rolling_maes = []
+            rolling_baseline_maes = []
+            rolling_skills = []
+            rolling_wins = []
+            for rolling_train, rolling_calibration, rolling_test in rolling_splits:
+                rolling_model = _new_player_candidate(candidate_name)
+                rolling_model.fit(
+                    x[rolling_train],
+                    residual_target[rolling_train],
+                    sample_weight=weights[rolling_train],
+                )
+                calibration_residual = rolling_model.predict(x[rolling_calibration])
+                calibration_y_fold = y[rolling_calibration].to_numpy(dtype=float)
+                calibration_baseline_fold = baseline[rolling_calibration].to_numpy(dtype=float)
+                fold_weight = 0.0
+                fold_best_mae = float(
+                    mean_absolute_error(
+                        calibration_y_fold,
+                        calibration_baseline_fold,
+                    )
+                )
+                for blend_weight in np.linspace(0.0, 1.0, 21):
+                    candidate_predictions = np.clip(
+                        calibration_baseline_fold
+                        + float(blend_weight) * calibration_residual,
+                        0.35,
+                        1.90,
+                    )
+                    candidate_mae = float(
+                        mean_absolute_error(
+                            calibration_y_fold,
+                            candidate_predictions,
+                        )
+                    )
+                    if candidate_mae < fold_best_mae:
+                        fold_best_mae = candidate_mae
+                        fold_weight = float(blend_weight)
+
+                rolling_baseline = baseline[rolling_test].to_numpy(dtype=float)
+                rolling_predictions = np.clip(
+                    rolling_baseline
+                    + fold_weight * rolling_model.predict(x[rolling_test]),
+                    0.35,
+                    1.90,
+                )
+                rolling_y = y[rolling_test].to_numpy(dtype=float)
+                rolling_mae = float(mean_absolute_error(rolling_y, rolling_predictions))
+                rolling_baseline_mae = float(
+                    mean_absolute_error(rolling_y, rolling_baseline)
+                )
+                rolling_maes.append(rolling_mae)
+                rolling_baseline_maes.append(rolling_baseline_mae)
+                rolling_skills.append(
+                    1.0 - rolling_mae / rolling_baseline_mae
+                    if rolling_baseline_mae
+                    else 0.0
+                )
+                rolling_wins.append(rolling_mae + 0.001 < rolling_baseline_mae)
+            candidate_scores[candidate_name].update(
+                {
+                    "rolling_folds": len(rolling_maes),
+                    "rolling_mae_mean": float(np.mean(rolling_maes))
+                    if rolling_maes
+                    else None,
+                    "rolling_baseline_mae_mean": float(
+                        np.mean(rolling_baseline_maes)
+                    )
+                    if rolling_baseline_maes
+                    else None,
+                    "rolling_skill_mean": float(np.mean(rolling_skills))
+                    if rolling_skills
+                    else None,
+                    "rolling_wins": int(sum(rolling_wins)),
+                }
+            )
+
         recommended_candidate = min(
             candidate_scores,
-            key=lambda name: candidate_scores[name]["mae"],
+            key=lambda name: (
+                candidate_scores[name].get("rolling_mae_mean")
+                if candidate_scores[name].get("rolling_mae_mean") is not None
+                else candidate_scores[name]["mae"]
+            ),
         )
         selected_candidate, selection_mode = resolve_selected_candidate(
             "player",
@@ -959,7 +1186,7 @@ def train_player_model(
             "split_strategy": "chronological_match_grouped_train_calibration_test",
             "mae": mae,
             "r2": float(r2_score(y_test, preds)),
-            "baseline": "last_10_rating",
+            "baseline": "hierarchical_shrunk_form",
             "baseline_mae": baseline_mae,
             "selected_candidate": selected_candidate,
             "recommended_candidate": recommended_candidate,
@@ -975,41 +1202,18 @@ def train_player_model(
             "interval_adjustment": interval_adjustment,
             "test_start": str(training_df.loc[test_mask, "target_date"].min()),
         }
-        rolling_maes = []
-        rolling_skills = []
-        for rolling_train, rolling_calibration, rolling_test in rolling_origin_splits(
-            training_df
-        ):
-            development = rolling_train | rolling_calibration
-            rolling_baseline = baseline[rolling_test]
-            if selected_candidate == "last_10_baseline":
-                rolling_predictions = rolling_baseline
-            else:
-                rolling_model = _new_player_candidate(selected_candidate)
-                rolling_model.fit(
-                    x[development],
-                    residual_target[development],
-                    sample_weight=weights[development],
-                )
-                rolling_predictions = (
-                    rolling_baseline
-                    + correction_weight * rolling_model.predict(x[rolling_test])
-                ).clip(0.35, 1.90)
-            rolling_y = y[rolling_test]
-            rolling_mae = float(mean_absolute_error(rolling_y, rolling_predictions))
-            rolling_baseline_mae = float(mean_absolute_error(rolling_y, rolling_baseline))
-            rolling_maes.append(rolling_mae)
-            rolling_skills.append(
-                1.0 - rolling_mae / rolling_baseline_mae
-                if rolling_baseline_mae
-                else 0.0
-            )
-        metrics["rolling_backtest_folds"] = len(rolling_maes)
-        metrics["rolling_mae_mean"] = float(np.mean(rolling_maes)) if rolling_maes else None
-        metrics["rolling_mae_std"] = float(np.std(rolling_maes)) if rolling_maes else None
-        metrics["rolling_skill_vs_baseline_mean"] = (
-            float(np.mean(rolling_skills)) if rolling_skills else None
+        rolling_metrics = candidate_scores.get(selected_candidate, {})
+        metrics["rolling_backtest_folds"] = int(
+            rolling_metrics.get("rolling_folds", 0) or 0
         )
+        metrics["rolling_mae_mean"] = rolling_metrics.get("rolling_mae_mean")
+        metrics["rolling_baseline_mae_mean"] = rolling_metrics.get(
+            "rolling_baseline_mae_mean"
+        )
+        metrics["rolling_skill_vs_baseline_mean"] = rolling_metrics.get(
+            "rolling_skill_mean"
+        )
+        metrics["rolling_wins"] = int(rolling_metrics.get("rolling_wins", 0) or 0)
     else:
         preds = y.mean() + np.zeros(len(y))
         metrics = {
@@ -1028,11 +1232,30 @@ def train_player_model(
         }
 
     metrics["evaluated_correction_weight"] = correction_weight
-    if (
-        selection_mode == "auto"
-        and float(metrics.get("model_reliability", 0.0)) <= 0.0
-    ):
+    rolling_folds = int(metrics.get("rolling_backtest_folds", 0) or 0)
+    rolling_wins = int(metrics.get("rolling_wins", 0) or 0)
+    holdout_pass = (
+        selected_candidate == "last_10_baseline"
+        or float(metrics.get("mae", float("inf"))) + 0.001
+        < float(metrics.get("baseline_mae", float("inf")))
+    )
+    rolling_pass = (
+        selected_candidate == "last_10_baseline"
+        or (
+            rolling_folds >= 2
+            and rolling_wins >= math.ceil(rolling_folds * 2.0 / 3.0)
+            and float(metrics.get("rolling_skill_vs_baseline_mean") or 0.0) > 0.005
+        )
+    )
+    enabled = selected_candidate == "last_10_baseline" or (holdout_pass and rolling_pass)
+    active_for_predictions = enabled or selection_mode == "manual"
+    metrics["holdout_safeguard_passed"] = holdout_pass
+    metrics["rolling_safeguard_passed"] = rolling_pass
+    metrics["enabled"] = enabled
+    metrics["active_for_predictions"] = active_for_predictions
+    if selection_mode == "auto" and not enabled:
         correction_weight = 0.0
+        metrics["model_reliability"] = 0.0
     metrics["correction_weight"] = correction_weight
 
     fit_candidate = (
@@ -1076,6 +1299,7 @@ PROBABILITY_CANDIDATES = (
 PROBABILITY_BLEND_WEIGHTS = tuple(np.linspace(0.0, 1.0, 21))
 PROBABILITY_TEMPERATURES = (0.65, 0.75, 0.85, 1.0, 1.15, 1.3, 1.5, 1.75, 2.0, 2.5, 3.0)
 PROBABILITY_MAX_MODEL_DELTA = 0.20
+MAP_MODEL_MAX_CORRECTION = 0.10
 
 
 def _new_probability_candidate(name: str, min_samples_leaf: int = 24):
@@ -1181,6 +1405,57 @@ def optimize_probability_blend_temperature(
     return best
 
 
+def apply_team_anchored_map_correction(
+    model_probabilities,
+    baseline_probabilities,
+    map_reliabilities,
+    blend_weight: float = 1.0,
+    max_model_delta: float = MAP_MODEL_MAX_CORRECTION,
+) -> np.ndarray:
+    model_values = np.asarray(model_probabilities, dtype=float)
+    baseline_values = np.asarray(baseline_probabilities, dtype=float)
+    reliabilities = np.clip(np.asarray(map_reliabilities, dtype=float), 0.0, 1.0)
+    model_values = np.clip(
+        model_values,
+        baseline_values - float(max_model_delta),
+        baseline_values + float(max_model_delta),
+    )
+    corrected = baseline_values + (
+        float(blend_weight)
+        * reliabilities
+        * (model_values - baseline_values)
+    )
+    return np.clip(corrected, 0.02, 0.98)
+
+
+def optimize_team_anchored_map_correction(
+    model_probabilities,
+    baseline_probabilities,
+    map_reliabilities,
+    targets,
+) -> dict:
+    targets = np.asarray(targets, dtype=float)
+    best = None
+    for blend_weight in PROBABILITY_BLEND_WEIGHTS:
+        probabilities = apply_team_anchored_map_correction(
+            model_probabilities,
+            baseline_probabilities,
+            map_reliabilities,
+            blend_weight=blend_weight,
+        )
+        score = float(log_loss(targets, probabilities, labels=[0, 1]))
+        if best is None or score < best["log_loss"]:
+            best = {
+                "log_loss": score,
+                "brier_score": float(brier_score_loss(targets, probabilities)),
+                "accuracy": float(accuracy_score(targets, probabilities >= 0.5)),
+                "model_blend_weight": float(blend_weight),
+                "probability_temperature": 1.0,
+                "max_model_delta": MAP_MODEL_MAX_CORRECTION,
+            }
+    return best
+
+
 def _select_probability_candidate(
     x: pd.DataFrame,
     y: pd.Series,
@@ -1189,6 +1464,8 @@ def _select_probability_candidate(
     train_mask: pd.Series,
     calibration_mask: pd.Series,
     min_samples_leaf: int = 24,
+    training_df: pd.DataFrame | None = None,
+    map_reliabilities: pd.Series | None = None,
 ) -> tuple[str, str, object, dict]:
     scores = {}
     models = {}
@@ -1210,16 +1487,155 @@ def _select_probability_candidate(
             baseline[calibration_mask],
         )
         calibration_y = y[calibration_mask]
-        raw_log_loss = float(log_loss(calibration_y, probabilities, labels=[0, 1]))
-        scores[candidate_name] = optimize_probability_blend_temperature(
-            probabilities,
-            baseline[calibration_mask],
-            calibration_y,
+        if map_reliabilities is None:
+            raw_evaluation = probabilities
+            scores[candidate_name] = optimize_probability_blend_temperature(
+                probabilities,
+                baseline[calibration_mask],
+                calibration_y,
+            )
+        else:
+            raw_evaluation = apply_team_anchored_map_correction(
+                probabilities,
+                baseline[calibration_mask],
+                map_reliabilities[calibration_mask],
+            )
+            scores[candidate_name] = optimize_team_anchored_map_correction(
+                probabilities,
+                baseline[calibration_mask],
+                map_reliabilities[calibration_mask],
+                calibration_y,
+            )
+        raw_log_loss = float(
+            log_loss(calibration_y, raw_evaluation, labels=[0, 1])
         )
         scores[candidate_name]["raw_log_loss"] = raw_log_loss
         models[candidate_name] = model
         kinds[candidate_name] = kind
-    selected = min(scores, key=lambda name: scores[name]["log_loss"])
+
+    if training_df is not None:
+        rolling_splits = rolling_origin_splits(training_df)
+        for candidate_name in PROBABILITY_CANDIDATES:
+            rolling_log_losses = []
+            rolling_brier_scores = []
+            rolling_accuracies = []
+            rolling_reference_log_losses = []
+            rolling_reference_briers = []
+            rolling_wins = []
+            for rolling_train, rolling_calibration, rolling_test in rolling_splits:
+                rolling_model, rolling_kind = _new_probability_candidate(
+                    candidate_name,
+                    min_samples_leaf,
+                )
+                _fit_probability_candidate(
+                    rolling_model,
+                    rolling_kind,
+                    x[rolling_train],
+                    y[rolling_train],
+                    baseline[rolling_train],
+                    weights[rolling_train],
+                )
+                calibration_probabilities = _predict_probability_candidate(
+                    rolling_model,
+                    rolling_kind,
+                    x[rolling_calibration],
+                    baseline[rolling_calibration],
+                )
+                if map_reliabilities is None:
+                    settings = optimize_probability_blend_temperature(
+                        calibration_probabilities,
+                        baseline[rolling_calibration],
+                        y[rolling_calibration],
+                    )
+                else:
+                    settings = optimize_team_anchored_map_correction(
+                        calibration_probabilities,
+                        baseline[rolling_calibration],
+                        map_reliabilities[rolling_calibration],
+                        y[rolling_calibration],
+                    )
+                raw_probabilities = _predict_probability_candidate(
+                    rolling_model,
+                    rolling_kind,
+                    x[rolling_test],
+                    baseline[rolling_test],
+                )
+                if map_reliabilities is None:
+                    probabilities = apply_probability_blend_temperature(
+                        raw_probabilities,
+                        baseline[rolling_test],
+                        blend_weight=settings["model_blend_weight"],
+                        temperature=settings["probability_temperature"],
+                        max_model_delta=settings["max_model_delta"],
+                    )
+                else:
+                    probabilities = apply_team_anchored_map_correction(
+                        raw_probabilities,
+                        baseline[rolling_test],
+                        map_reliabilities[rolling_test],
+                        blend_weight=settings["model_blend_weight"],
+                        max_model_delta=settings["max_model_delta"],
+                    )
+                test_y = y[rolling_test]
+                baseline_probabilities = baseline[rolling_test].to_numpy(dtype=float)
+                coin_probabilities = np.full(len(test_y), 0.5)
+                candidate_log_loss = float(
+                    log_loss(test_y, probabilities, labels=[0, 1])
+                )
+                candidate_brier = float(brier_score_loss(test_y, probabilities))
+                reference_log_loss = min(
+                    float(log_loss(test_y, baseline_probabilities, labels=[0, 1])),
+                    float(log_loss(test_y, coin_probabilities, labels=[0, 1])),
+                )
+                reference_brier = min(
+                    float(brier_score_loss(test_y, baseline_probabilities)),
+                    0.25,
+                )
+                rolling_log_losses.append(candidate_log_loss)
+                rolling_brier_scores.append(candidate_brier)
+                rolling_accuracies.append(
+                    float(accuracy_score(test_y, probabilities >= 0.5))
+                )
+                rolling_reference_log_losses.append(reference_log_loss)
+                rolling_reference_briers.append(reference_brier)
+                rolling_wins.append(
+                    candidate_log_loss + 0.001 < reference_log_loss
+                    and candidate_brier + 0.0005 < reference_brier
+                )
+            scores[candidate_name].update(
+                {
+                    "rolling_folds": len(rolling_log_losses),
+                    "rolling_log_loss_mean": float(np.mean(rolling_log_losses))
+                    if rolling_log_losses
+                    else None,
+                    "rolling_brier_mean": float(np.mean(rolling_brier_scores))
+                    if rolling_brier_scores
+                    else None,
+                    "rolling_accuracy_mean": float(np.mean(rolling_accuracies))
+                    if rolling_accuracies
+                    else None,
+                    "rolling_reference_log_loss_mean": float(
+                        np.mean(rolling_reference_log_losses)
+                    )
+                    if rolling_reference_log_losses
+                    else None,
+                    "rolling_reference_brier_mean": float(
+                        np.mean(rolling_reference_briers)
+                    )
+                    if rolling_reference_briers
+                    else None,
+                    "rolling_wins": int(sum(rolling_wins)),
+                }
+            )
+
+    selected = min(
+        scores,
+        key=lambda name: (
+            scores[name].get("rolling_log_loss_mean")
+            if scores[name].get("rolling_log_loss_mean") is not None
+            else scores[name]["log_loss"]
+        ),
+    )
     return selected, kinds[selected], models[selected], scores
 
 
@@ -1268,6 +1684,7 @@ def train_team_model(
                 weights,
                 train_mask,
                 calibration_mask,
+                training_df=training_df,
             )
         )
         selected_candidate, selection_mode = resolve_selected_candidate(
@@ -1358,10 +1775,32 @@ def train_team_model(
             (accuracy - reference_accuracy) / max(0.01, 1.0 - reference_accuracy),
         )
         model_reliability = min(1.0, (log_skill + brier_skill + accuracy_skill) / 3.0)
-        enabled = (
-            model_kind == "baseline"
-            or (model_log_loss < reference_log_loss and model_brier < reference_brier)
+        rolling_metrics = candidate_scores.get(selected_candidate, {})
+        rolling_folds = int(rolling_metrics.get("rolling_folds", 0) or 0)
+        rolling_wins = int(rolling_metrics.get("rolling_wins", 0) or 0)
+        rolling_model_log_loss = rolling_metrics.get("rolling_log_loss_mean")
+        rolling_reference_log_loss = rolling_metrics.get(
+            "rolling_reference_log_loss_mean"
         )
+        rolling_model_brier = rolling_metrics.get("rolling_brier_mean")
+        rolling_reference_brier = rolling_metrics.get(
+            "rolling_reference_brier_mean"
+        )
+        holdout_pass = (
+            model_log_loss + 0.002 < reference_log_loss
+            and model_brier + 0.001 < reference_brier
+        )
+        rolling_pass = (
+            rolling_folds >= 2
+            and rolling_wins >= math.ceil(rolling_folds * 2.0 / 3.0)
+            and rolling_model_log_loss is not None
+            and rolling_reference_log_loss is not None
+            and rolling_model_log_loss + 0.001 < rolling_reference_log_loss
+            and rolling_model_brier is not None
+            and rolling_reference_brier is not None
+            and rolling_model_brier + 0.0005 < rolling_reference_brier
+        )
+        enabled = model_kind == "baseline" or (holdout_pass and rolling_pass)
         active_for_predictions = enabled or selection_mode == "manual"
         if not enabled and selection_mode == "auto":
             model_reliability = 0.0
@@ -1395,64 +1834,17 @@ def train_team_model(
             "elo_brier_score": baseline_brier,
             "reliability_baseline": "best_of_elo_or_coinflip",
             "model_reliability": model_reliability,
+            "holdout_safeguard_passed": holdout_pass,
+            "rolling_safeguard_passed": rolling_pass,
+            "rolling_backtest_folds": rolling_folds,
+            "rolling_wins": rolling_wins,
+            "rolling_log_loss_mean": rolling_model_log_loss,
+            "rolling_reference_log_loss_mean": rolling_reference_log_loss,
+            "rolling_brier_mean": rolling_model_brier,
+            "rolling_reference_brier_mean": rolling_reference_brier,
+            "rolling_accuracy_mean": rolling_metrics.get("rolling_accuracy_mean"),
             "test_start": str(training_df.loc[test_mask, "target_date"].min()),
         }
-
-        rolling_accuracies = []
-        rolling_log_losses = []
-        rolling_baseline_accuracies = []
-        for rolling_train, rolling_calibration, rolling_test in rolling_origin_splits(training_df):
-            rolling_calibration_y = y[rolling_calibration]
-            if selected_candidate == "elo_baseline":
-                rolling_probs = baseline[rolling_test].to_numpy(dtype=float)
-            else:
-                rolling_model, rolling_kind = _new_probability_candidate(selected_candidate)
-                _fit_probability_candidate(
-                    rolling_model,
-                    rolling_kind,
-                    x[rolling_train],
-                    y[rolling_train],
-                    baseline[rolling_train],
-                    weights[rolling_train],
-                )
-                rolling_calibration_probs = _predict_probability_candidate(
-                    rolling_model,
-                    rolling_kind,
-                    x[rolling_calibration],
-                    baseline[rolling_calibration],
-                )
-                rolling_settings = optimize_probability_blend_temperature(
-                    rolling_calibration_probs,
-                    baseline[rolling_calibration],
-                    rolling_calibration_y,
-                )
-                rolling_raw = _predict_probability_candidate(
-                    rolling_model,
-                    rolling_kind,
-                    x[rolling_test],
-                    baseline[rolling_test],
-                )
-                rolling_probs = apply_probability_blend_temperature(
-                    rolling_raw,
-                    baseline[rolling_test],
-                    blend_weight=rolling_settings["model_blend_weight"],
-                    temperature=rolling_settings["probability_temperature"],
-                    max_model_delta=rolling_settings["max_model_delta"],
-                )
-            rolling_y = y[rolling_test]
-            rolling_baseline = baseline[rolling_test].to_numpy(dtype=float)
-            rolling_accuracies.append(float(accuracy_score(rolling_y, rolling_probs >= 0.5)))
-            rolling_baseline_accuracies.append(
-                float(accuracy_score(rolling_y, rolling_baseline >= 0.5))
-            )
-            rolling_log_losses.append(float(log_loss(rolling_y, rolling_probs, labels=[0, 1])))
-        metrics["rolling_backtest_folds"] = len(rolling_accuracies)
-        metrics["rolling_accuracy_mean"] = float(np.mean(rolling_accuracies)) if rolling_accuracies else None
-        metrics["rolling_accuracy_std"] = float(np.std(rolling_accuracies)) if rolling_accuracies else None
-        metrics["rolling_elo_accuracy_mean"] = (
-            float(np.mean(rolling_baseline_accuracies)) if rolling_baseline_accuracies else None
-        )
-        metrics["rolling_log_loss_mean"] = float(np.mean(rolling_log_losses)) if rolling_log_losses else None
     else:
         metrics = {
             "status": "trained",
@@ -1489,6 +1881,10 @@ def train_map_model(
     x = map_feature_frame(training_df, map_names)
     y = training_df["target_map_win"].astype(float)
     baseline = training_df["map_baseline_probability"].fillna(0.5).astype(float).clip(0.05, 0.95)
+    map_reliabilities = training_df.get(
+        "map_history_reliability",
+        pd.Series(0.0, index=training_df.index),
+    ).fillna(0.0).astype(float).clip(0.0, 1.0)
     weights = training_df.get("training_weight", pd.Series(1.0, index=training_df.index)).astype(float)
     train_mask, calibration_mask, test_mask = grouped_chronological_three_way_split(training_df)
     recommended_candidate, recommended_kind, recommended_model, candidate_scores = _select_probability_candidate(
@@ -1499,6 +1895,8 @@ def train_map_model(
         train_mask,
         calibration_mask,
         min_samples_leaf=20,
+        training_df=training_df,
+        map_reliabilities=map_reliabilities,
     )
     selected_candidate, selection_mode = resolve_selected_candidate(
         "map",
@@ -1507,7 +1905,7 @@ def train_map_model(
     )
     model_blend_weight = 0.0
     probability_temperature = 1.0
-    max_model_delta = PROBABILITY_MAX_MODEL_DELTA
+    max_model_delta = MAP_MODEL_MAX_CORRECTION
     if selected_candidate == "map_form_baseline":
         evaluation_model = None
         model_kind = "baseline"
@@ -1550,7 +1948,7 @@ def train_map_model(
             calibration_settings["probability_temperature"]
         )
         max_model_delta = float(calibration_settings["max_model_delta"])
-        calibration_method = "baseline_blend_temperature"
+        calibration_method = "team_anchored_reliability_scaled_correction"
 
     raw_test = (
         baseline[test_mask].to_numpy(dtype=float)
@@ -1567,31 +1965,54 @@ def train_map_model(
     probabilities = (
         raw_test
         if model_kind == "baseline"
-        else apply_probability_blend_temperature(
+        else apply_team_anchored_map_correction(
             raw_test,
             baseline_test,
+            map_reliabilities[test_mask],
             blend_weight=model_blend_weight,
-            temperature=probability_temperature,
             max_model_delta=max_model_delta,
         )
     )
     model_log_loss = float(log_loss(y_test, probabilities, labels=[0, 1]))
     baseline_log_loss = float(log_loss(y_test, baseline_test, labels=[0, 1]))
+    coin_probabilities = np.full(len(y_test), 0.5)
+    coin_log_loss = float(log_loss(y_test, coin_probabilities, labels=[0, 1]))
     model_brier = float(brier_score_loss(y_test, probabilities))
     baseline_brier = float(brier_score_loss(y_test, baseline_test))
     accuracy = float(accuracy_score(y_test, probabilities >= 0.5))
     baseline_accuracy = float(accuracy_score(y_test, baseline_test >= 0.5))
-    log_skill = max(0.0, 1.0 - model_log_loss / baseline_log_loss) if baseline_log_loss else 0.0
-    brier_skill = max(0.0, 1.0 - model_brier / baseline_brier) if baseline_brier else 0.0
+    reference_log_loss = min(coin_log_loss, baseline_log_loss)
+    reference_brier = min(0.25, baseline_brier)
+    reference_accuracy = max(0.5, baseline_accuracy)
+    log_skill = max(0.0, 1.0 - model_log_loss / reference_log_loss) if reference_log_loss else 0.0
+    brier_skill = max(0.0, 1.0 - model_brier / reference_brier) if reference_brier else 0.0
     accuracy_skill = max(
         0.0,
-        (accuracy - baseline_accuracy) / max(0.01, 1.0 - baseline_accuracy),
+        (accuracy - reference_accuracy) / max(0.01, 1.0 - reference_accuracy),
     )
     model_reliability = min(1.0, (log_skill + brier_skill + accuracy_skill) / 3.0)
-    enabled = (
-        model_kind == "baseline"
-        or (model_log_loss < baseline_log_loss and model_brier < baseline_brier)
+    rolling_metrics = candidate_scores.get(selected_candidate, {})
+    rolling_folds = int(rolling_metrics.get("rolling_folds", 0) or 0)
+    rolling_wins = int(rolling_metrics.get("rolling_wins", 0) or 0)
+    rolling_model_log_loss = rolling_metrics.get("rolling_log_loss_mean")
+    rolling_reference_log_loss = rolling_metrics.get("rolling_reference_log_loss_mean")
+    rolling_model_brier = rolling_metrics.get("rolling_brier_mean")
+    rolling_reference_brier = rolling_metrics.get("rolling_reference_brier_mean")
+    holdout_pass = (
+        model_log_loss + 0.002 < reference_log_loss
+        and model_brier + 0.001 < reference_brier
     )
+    rolling_pass = (
+        rolling_folds >= 2
+        and rolling_wins >= math.ceil(rolling_folds * 2.0 / 3.0)
+        and rolling_model_log_loss is not None
+        and rolling_reference_log_loss is not None
+        and rolling_model_log_loss + 0.001 < rolling_reference_log_loss
+        and rolling_model_brier is not None
+        and rolling_reference_brier is not None
+        and rolling_model_brier + 0.0005 < rolling_reference_brier
+    )
+    enabled = model_kind == "baseline" or (holdout_pass and rolling_pass)
     active_for_predictions = enabled or selection_mode == "manual"
     if not enabled and selection_mode == "auto":
         model_reliability = 0.0
@@ -1615,7 +2036,23 @@ def train_map_model(
         "baseline_accuracy": baseline_accuracy,
         "baseline_log_loss": baseline_log_loss,
         "baseline_brier_score": baseline_brier,
+        "coinflip_accuracy": 0.5,
+        "coinflip_log_loss": coin_log_loss,
+        "reliability_baseline": "best_of_team_anchored_map_form_or_coinflip",
+        "probability_structure": "team_anchor_plus_reliability_scaled_map_correction",
+        "minimum_team_anchor_weight": 1.0 - MAX_MAP_SPECIFIC_WEIGHT,
+        "maximum_map_specific_weight": MAX_MAP_SPECIFIC_WEIGHT,
+        "mean_map_history_reliability": float(map_reliabilities.mean()),
         "model_reliability": model_reliability,
+        "holdout_safeguard_passed": holdout_pass,
+        "rolling_safeguard_passed": rolling_pass,
+        "rolling_backtest_folds": rolling_folds,
+        "rolling_wins": rolling_wins,
+        "rolling_log_loss_mean": rolling_model_log_loss,
+        "rolling_reference_log_loss_mean": rolling_reference_log_loss,
+        "rolling_brier_mean": rolling_model_brier,
+        "rolling_reference_brier_mean": rolling_reference_brier,
+        "rolling_accuracy_mean": rolling_metrics.get("rolling_accuracy_mean"),
         "enabled": enabled,
         "active_for_predictions": active_for_predictions,
         "calibration": calibration_method,
@@ -1640,6 +2077,8 @@ def train_map_model(
         "model_blend_weight": model_blend_weight,
         "probability_temperature": probability_temperature,
         "max_model_delta": max_model_delta,
+        "maximum_map_specific_weight": MAX_MAP_SPECIFIC_WEIGHT,
+        "hierarchical_team_anchor": True,
         "map_names": map_names,
         "features": list(x.columns),
     }, metrics
@@ -1741,9 +2180,30 @@ def train_models(
         matches,
         registry_team_pages(season_year=None),
     )
+    matches = enrich_match_metadata(
+        matches,
+        registry=load_team_registry(),
+        rosters=load_csv(ROSTERS_CSV),
+    )
+    source_matches = matches.copy()
+    source_quality = data_quality_report(matches)
     matches = filter_registry_tier1_matchups(
         filter_curated_competition_history(matches)
     )
+    matches = filter_training_ready_matches(matches)
+    training_quality = data_quality_report(matches)
+    quality_payload = {
+        "source": source_quality,
+        "training": training_quality,
+        "validation": matches.attrs.get("training_validation", {}),
+    }
+    Path(DATA_QUALITY_PATH).parent.mkdir(parents=True, exist_ok=True)
+    Path(DATA_QUALITY_PATH).write_text(
+        json.dumps(quality_payload, indent=2),
+        encoding="utf-8",
+    )
+    if matches.empty:
+        raise ValueError("No classified, complete Tier 1 matches are ready for training.")
     fingerprint = dataset_fingerprint(matches)
     metrics_path = Path(METRICS_PATH)
     if (
@@ -1809,8 +2269,13 @@ def train_models(
         "history_scope": "curated_vct_history_plus_current_season",
         "training_half_life_days": TRAINING_HALF_LIFE_DAYS,
         "minimum_player_history_maps": 1,
-        "team_match_coverage": coverage_summary(matches, min_team_matches, season_year),
-        "match_schema": "player-map-v6-vct-tier-context",
+        "team_match_coverage": coverage_summary(
+            source_matches,
+            min_team_matches,
+            season_year,
+        ),
+        "match_schema": "player-map-v7-quality-region-patch-veto",
+        "data_quality": quality_payload,
         "player_training_rows": len(player_training),
         "team_training_rows": len(team_training),
         "map_training_rows": len(map_training),
@@ -1842,6 +2307,7 @@ def train_models(
                 "recommended_candidate": player_models["recommended_candidate"],
                 "selection_mode": player_models["selection_mode"],
                 "correction_weight": player_models["correction_weight"],
+                "baseline_feature": "player_shrunk_rating",
                 "features": PLAYER_FEATURES,
                 "residual_std": player_metrics.get("residual_std", 0.18),
                 "metadata": metadata,

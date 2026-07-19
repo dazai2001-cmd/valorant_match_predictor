@@ -231,6 +231,9 @@ def model_reports(metrics: dict) -> list[dict]:
                 "model_blend_weight": task_metrics.get("model_blend_weight") if task != "player" else None,
                 "probability_temperature": task_metrics.get("probability_temperature") if task != "player" else None,
                 "max_model_delta": task_metrics.get("max_model_delta") if task != "player" else None,
+                "rolling_folds": task_metrics.get("rolling_backtest_folds"),
+                "rolling_wins": task_metrics.get("rolling_wins"),
+                "rolling_passed": task_metrics.get("rolling_safeguard_passed"),
             }
         )
     return reports
@@ -340,12 +343,17 @@ def base_context(**extra) -> dict:
             "recent_maps": request.form.get("recent_maps", "10"),
             "recent_news_days": request.form.get("recent_news_days", "45"),
             "maps": [request.form.get(f"map_{index}", "") for index in range(1, 6)],
+            "map_picks": [
+                request.form.get(f"map_pick_{index}", "")
+                for index in range(1, 6)
+            ],
         },
         "last_prediction": load_last_prediction(),
         "metrics": metrics,
         "model_choices": MODEL_CHOICES,
         "model_selection": load_model_selection(),
         "model_reports": model_reports(metrics),
+        "data_quality": metrics.get("data_quality", {}) if metrics else {},
         "job": job,
         "job_running": job.get("status") in {"queued", "running"},
         "match_coverage": match_coverage_payload(),
@@ -372,10 +380,16 @@ def predict_route():
         best_of = int_form("best_of", 3) or 3
         map_values = [request.form.get(f"map_{index}", "").strip() for index in range(1, best_of + 1)]
         selected_maps = [value for value in map_values if value]
+        selected_picks = [
+            request.form.get(f"map_pick_{index}", "").strip().lower()
+            for index in range(1, best_of + 1)
+        ]
         if selected_maps and len(selected_maps) != best_of:
             raise ValueError(f"Choose all {best_of} maps for a Bo{best_of}, or leave every map on Auto.")
         if len(set(selected_maps)) != len(selected_maps):
             raise ValueError("Each selected map must be unique.")
+        if any(selected_picks) and not selected_maps:
+            raise ValueError("Choose all maps before assigning pick ownership.")
 
         if team1 == team2:
             raise ValueError("Choose two different teams.")
@@ -409,6 +423,7 @@ def predict_route():
             event_stage=request.form.get("event_stage", ""),
             current_patch=request.form.get("patch", ""),
             selected_maps=selected_maps,
+            selected_picks=selected_picks,
         )
         result = {
             "summary": summary,

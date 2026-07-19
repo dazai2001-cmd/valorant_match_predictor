@@ -1,8 +1,20 @@
 from __future__ import annotations
 
-from .config import MATCHES_CSV, NEWS_CSV, ROSTERS_CSV, UPCOMING_MATCHES_CSV
+import json
+from pathlib import Path
+
+from .config import (
+    DATA_QUALITY_PATH,
+    MATCHES_CSV,
+    NEWS_CSV,
+    ROSTERS_CSV,
+    UPCOMING_MATCHES_CSV,
+)
+from .data_quality import data_quality_report, enrich_match_metadata
+from .storage import sync_match_data
 from .team_registry import (
     VCT_TIER1_SEASON,
+    load_team_registry,
     registry_team_pages,
     seed_vct_tier1_teams,
 )
@@ -82,6 +94,16 @@ def update_database_and_model(
         team_pages=registry_team_pages(season_year=VCT_TIER1_SEASON),
     )
     roster_summary = dict(rosters.attrs.get("scrape_summary", {}))
+    matches = enrich_match_metadata(
+        matches,
+        registry=load_team_registry(),
+        rosters=rosters,
+    )
+    matches.to_csv(MATCHES_CSV, index=False)
+    sync_match_data(matches, source=str(MATCHES_CSV))
+    quality = data_quality_report(matches)
+    Path(DATA_QUALITY_PATH).parent.mkdir(parents=True, exist_ok=True)
+    Path(DATA_QUALITY_PATH).write_text(json.dumps({"source": quality}, indent=2), encoding="utf-8")
 
     _stage_boundary(progress, 3, "news", "Updating VLR roster and availability news")
     try:
@@ -130,6 +152,7 @@ def update_database_and_model(
         "news_rows": news_rows,
         "upcoming_rows": upcoming_rows,
         "player_map_rows": len(matches),
+        "data_quality": quality,
         "training_status": metrics.get("training_status"),
         "model_version": metrics.get("model_version"),
         "model_selection": metrics.get("model_selection", {}),

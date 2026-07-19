@@ -3,6 +3,7 @@ import argparse
 import pandas as pd
 
 from ..config import MATCHES_CSV, MATCH_PREDICTION_CSV, NEWS_CSV, PREDICTIONS_CSV, ROSTERS_CSV
+from ..data_quality import enrich_match_metadata, filter_training_ready_matches
 from ..features.form_calculations import (
     calculate_team_form,
     clean_match_data,
@@ -11,8 +12,12 @@ from ..features.form_calculations import (
     normalize_map_name,
     probable_lineup,
 )
-from ..features.team_context import current_team_context, normalize_lineup_identity
-from ..team_registry import filter_registry_tier1_matchups, registry_team_pages
+from ..features.team_context import (
+    current_team_context,
+    normalize_lineup_identity,
+    rebase_map_probability,
+)
+from ..team_registry import filter_registry_tier1_matchups, load_team_registry, registry_team_pages
 from ..training.model_inference import (
     cached_team_context,
     predict_map_win_probabilities,
@@ -206,19 +211,32 @@ def predict_match(
     event_stage: str = "",
     current_patch: str = "",
     selected_maps: list[str] | None = None,
+    selected_picks: list[str] | None = None,
 ) -> tuple[dict, pd.DataFrame, pd.DataFrame]:
     selected_maps = [normalize_map_name(name) for name in (selected_maps or []) if normalize_map_name(name)]
     if selected_maps and len(selected_maps) != best_of:
         raise ValueError(f"Choose exactly {best_of} unique maps for a Bo{best_of}, or leave all maps on Auto.")
     if len(set(selected_maps)) != len(selected_maps):
         raise ValueError("Each selected map must be unique.")
+    selected_picks = [str(value or "").strip().lower() for value in (selected_picks or [])]
+    selected_picks = (selected_picks + [""] * best_of)[:best_of]
+    if any(value not in {"", "team1", "team2", "decider"} for value in selected_picks):
+        raise ValueError("Each map role must be Auto, Team 1 pick, Team 2 pick, or Decider.")
+    if any(selected_picks) and not selected_maps:
+        raise ValueError("Choose the map order before assigning pick ownership.")
     raw_matches = canonicalize_match_dataframe(
         load_csv(matches_csv),
         registry_team_pages(season_year=None),
     )
+    raw_matches = enrich_match_metadata(
+        raw_matches,
+        registry=load_team_registry(),
+        rosters=load_csv(rosters_csv),
+    )
     raw_matches = filter_registry_tier1_matchups(
         filter_curated_competition_history(raw_matches)
     )
+    raw_matches = filter_training_ready_matches(raw_matches)
     matches_fingerprint = dataset_fingerprint(raw_matches)
     matches = clean_match_data(raw_matches)
     if season_year is not None and matches["match_date_sort"].notna().any():
@@ -240,6 +258,8 @@ def predict_match(
         recent_days=recent_days,
         use_trained_models=use_trained_models,
         prepared_matches=matches,
+        selected_maps=selected_maps,
+        dataset_fingerprint_value=matches_fingerprint,
     )
     players = mark_lineup_usage(players, [team1, team2])
     players.to_csv(player_output_csv, index=False)
@@ -332,10 +352,13 @@ def predict_match(
             map_probability = model_weight * trained_team_probability + (1.0 - model_weight) * map_probability
 
     contextual_map_probabilities = team_context.get("map_probabilities", {})
-    map_weight = 0.45 * map_pool_reliability
     if contextual_map_probabilities:
         simulation_map_probabilities = {
-            map_name: (1.0 - map_weight) * map_probability + map_weight * float(probability)
+            map_name: rebase_map_probability(
+                float(probability),
+                elo_probability,
+                map_probability,
+            )
             for map_name, probability in contextual_map_probabilities.items()
         }
     else:
@@ -361,6 +384,9 @@ def predict_match(
         learned_map_probabilities, map_model_metadata = predict_map_win_probabilities(
             team_context,
             resolved_map_order,
+            picked_by=selected_picks if selected_maps else None,
+            baseline_probabilities=simulation_map_probabilities,
+            team_anchor_probability=map_probability,
         )
         if map_model_metadata.get("map_model_used"):
             simulation_map_probabilities, deployment_weight = (
@@ -459,6 +485,7 @@ def predict_match(
             0.0,
         ),
         "map_selection_source": map_selection_source,
+        "map_pick_order": " | ".join(selected_picks) if selected_maps else "",
         "elo_probability": elo_probability,
         "elo_reliability": elo_reliability,
         "trained_team1_map_probability": trained_team_probability,
@@ -479,6 +506,17 @@ def predict_match(
         summary[f"map_{index}_team1_win_probability"] = probability
         summary[f"map_{index}_team2_win_probability"] = 1.0 - probability
         summary[f"map_{index}_predicted_winner"] = team1 if probability >= 0.5 else team2
+        pick_role = selected_picks[index - 1] if selected_maps and index <= len(selected_picks) else ""
+        summary[f"map_{index}_pick_role"] = pick_role
+        summary[f"map_{index}_pick_owner"] = (
+            team1
+            if pick_role == "team1"
+            else team2
+            if pick_role == "team2"
+            else "Decider"
+            if pick_role == "decider"
+            else "Auto"
+        )
 
     summary_df = pd.DataFrame([{**summary, **{f"team1_{k}": v for k, v in team1_summary.items() if k != "team"}}])
     for key, value in team2_summary.items():
@@ -559,6 +597,12 @@ def main() -> None:
         default=[],
         help="Ordered maps; provide exactly the Bo count, for example --maps Haven Breeze Lotus.",
     )
+    parser.add_argument(
+        "--picks",
+        nargs="*",
+        default=[],
+        help="Optional map roles aligned with --maps: team1, team2, decider, or auto.",
+    )
     parser.add_argument("--refresh-news", action="store_true")
     parser.add_argument("--news-pages", type=int, default=3)
     parser.add_argument("--refresh-matches", action="store_true")
@@ -599,6 +643,7 @@ def main() -> None:
         recent_days=args.recent_days,
         use_trained_models=args.use_trained_models,
         selected_maps=args.maps,
+        selected_picks=["" if value == "auto" else value for value in args.picks],
     )
     print_prediction(summary, players, team_summaries)
     print()

@@ -12,7 +12,7 @@ MODEL_CHOICES = {
         "hgb_absolute": "HGB Absolute",
         "hgb_squared": "HGB Squared",
         "extra_trees": "Extra Trees",
-        "last_10_baseline": "Last-10 Baseline",
+        "last_10_baseline": "Hierarchical Form Baseline",
     },
     "team": {
         "auto": "Auto",
@@ -26,7 +26,7 @@ MODEL_CHOICES = {
         "logistic_classifier": "Logistic Classifier",
         "hgb_classifier": "HGB Classifier",
         "hgb_residual": "HGB Map-Residual",
-        "map_form_baseline": "Map-Form Baseline",
+        "map_form_baseline": "Team-Anchored Map Baseline",
     },
 }
 

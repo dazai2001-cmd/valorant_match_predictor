@@ -4,9 +4,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ..features.form_calculations import calculate_team_form, clean_match_data
+from ..features.form_calculations import (
+    calculate_team_form,
+    clean_match_data,
+    normalize_map_name,
+    normalize_player_name,
+    weighted_recent_mean,
+)
 from ..config import MAP_MODEL_PATH
 from ..features.team_context import (
+    build_sequential_team_context,
     current_team_context,
     normalize_lineup_identity,
     team_context_from_state,
@@ -18,6 +25,7 @@ from .train_models import (
     TEAM_MODEL_PATH,
     apply_probability_blend_temperature,
     apply_symmetric_calibration,
+    apply_team_anchored_map_correction,
     map_feature_frame,
     team_feature_row,
     team_rows_from_cleaned,
@@ -63,6 +71,8 @@ def apply_player_model(
     matches: pd.DataFrame,
     team1: str,
     team2: str,
+    selected_maps: list[str] | None = None,
+    dataset_fingerprint_value: str = "",
     model_path: str = PLAYER_MODEL_PATH,
 ) -> pd.DataFrame:
     payload = load_model_payload(model_path)
@@ -71,11 +81,70 @@ def apply_player_model(
 
     cleaned = clean_match_data(matches)
     output = profiles.copy()
+    selected_maps = {
+        normalize_map_name(map_name)
+        for map_name in (selected_maps or [])
+        if normalize_map_name(map_name)
+    }
     team_forms = {
         team: calculate_team_form(cleaned, team)
         for team in {team1, team2}
     }
-    cleaned_player_names = cleaned["player"].astype(str).str.lower()
+    cleaned_player_names = cleaned["player"].map(normalize_player_name)
+    team_maps = team_rows_from_cleaned(cleaned)
+    prediction_date = (
+        team_maps["match_date_sort"].max() + pd.Timedelta(days=1)
+        if not team_maps.empty and team_maps["match_date_sort"].notna().any()
+        else pd.Timestamp.now(tz="UTC")
+    )
+
+    lineup_by_team = {}
+    for team in [team1, team2]:
+        team_profiles = output[output["team"] == team].copy()
+        sort_columns = [
+            column
+            for column in ["lineup_certainty", "data_reliability", "base_rating"]
+            if column in team_profiles.columns
+        ]
+        if sort_columns:
+            team_profiles = team_profiles.sort_values(
+                sort_columns,
+                ascending=[False] * len(sort_columns),
+            )
+        lineup_by_team[team] = {
+            normalize_lineup_identity(row.get("player"), row.get("player_id"))
+            for _, row in team_profiles.head(5).iterrows()
+        }
+    team_payload = load_model_payload(TEAM_MODEL_PATH)
+    can_reuse_team_state = bool(
+        team_payload
+        and team_payload.get("sequential_state") is not None
+        and dataset_fingerprint_value
+        and team_payload.get("metadata", {}).get("dataset_fingerprint")
+        == dataset_fingerprint_value
+    )
+    if can_reuse_team_state:
+        sequential_state = team_payload["sequential_state"]
+    else:
+        _, sequential_state = build_sequential_team_context(cleaned, team_maps)
+    team_contexts = {
+        team1: team_context_from_state(
+            sequential_state,
+            team1,
+            team2,
+            lineup_a=lineup_by_team.get(team1),
+            lineup_b=lineup_by_team.get(team2),
+            as_of_date=prediction_date,
+        ),
+        team2: team_context_from_state(
+            sequential_state,
+            team2,
+            team1,
+            lineup_a=lineup_by_team.get(team2),
+            lineup_b=lineup_by_team.get(team1),
+            as_of_date=prediction_date,
+        ),
+    }
     feature_rows = []
     for _, row in output.iterrows():
         team_form = team_forms.get(row["team"])
@@ -85,10 +154,34 @@ def apply_player_model(
         opponent_form = team_forms.get(opponent)
         if opponent_form is None:
             opponent_form = calculate_team_form(cleaned, opponent)
-        player_vs_opponent = cleaned[
-            (cleaned_player_names == str(row["player"]).lower())
-            & (cleaned["opponent"] == opponent)
-        ]
+        player_id = pd.to_numeric(pd.Series([row.get("player_id")]), errors="coerce").iloc[0]
+        if pd.notna(player_id) and "player_id" in cleaned.columns:
+            player_history = cleaned[
+                pd.to_numeric(cleaned["player_id"], errors="coerce").eq(player_id)
+            ]
+        else:
+            player_history = cleaned[
+                cleaned_player_names == normalize_player_name(row["player"])
+            ]
+        player_vs_opponent = player_history[player_history["opponent"] == opponent]
+        shrunk_rating = float(row.get("base_rating", 1.0) or 1.0)
+        if selected_maps and "map_name" in player_history.columns:
+            map_history = player_history[
+                player_history["map_name"].map(normalize_map_name).isin(selected_maps)
+            ].tail(20)
+        else:
+            map_history = player_history.iloc[:0]
+        if map_history.empty:
+            map_rating = shrunk_rating
+            map_maps = 0
+        else:
+            map_raw_rating = weighted_recent_mean(map_history["rating_for_model"])
+            map_maps = len(map_history)
+            map_reliability = map_maps / (map_maps + 6.0)
+            map_rating = shrunk_rating + map_reliability * (
+                map_raw_rating - shrunk_rating
+            )
+        sequential = team_contexts.get(row["team"], {})
 
         feature_rows.append(
             {
@@ -97,6 +190,9 @@ def apply_player_model(
                 "player_last_10_rating": row.get("last_10_rating", row.get("base_rating", 1.0)),
                 "player_60d_rating": row.get("recent_60d_rating", row.get("raw_form_rating", row.get("base_rating", 1.0))),
                 "player_overall_rating": row.get("overall_rating", row.get("base_rating", 1.0)),
+                "player_shrunk_rating": shrunk_rating,
+                "player_map_rating": map_rating,
+                "player_map_maps": map_maps,
                 "player_rating_trend": row.get("rating_trend", 0.0),
                 "player_recent_acs": row.get("avg_acs", 200.0),
                 "player_recent_kd": row.get("kd_ratio", 1.0),
@@ -116,6 +212,13 @@ def apply_player_model(
                 if not player_vs_opponent.empty
                 else row.get("overall_rating", row.get("base_rating", 1.0)),
                 "player_vs_opponent_maps": len(player_vs_opponent),
+                "team_elo_advantage": float(sequential.get("elo_diff", 0.0)),
+                "region_elo_advantage": float(sequential.get("region_elo_diff", 0.0)),
+                "strength_of_schedule_diff": float(
+                    sequential.get("strength_of_schedule_diff", 0.0)
+                ),
+                "lineup_rating_diff": float(sequential.get("lineup_rating_diff", 0.0)),
+                "map_pool_elo_diff": float(sequential.get("map_pool_elo_diff", 0.0)),
             }
         )
 
@@ -131,10 +234,13 @@ def apply_player_model(
         0.0,
         min(1.0, float(payload.get("correction_weight", model_reliability))),
     )
-    baseline = pd.to_numeric(
-        output.get("last_10_rating", output.get("base_rating", 1.0)),
-        errors="coerce",
-    ).fillna(1.0)
+    baseline_feature = payload.get("baseline_feature", "player_last_10_rating")
+    baseline_source = (
+        output.get("base_rating", 1.0)
+        if baseline_feature == "player_shrunk_rating"
+        else output.get("last_10_rating", output.get("base_rating", 1.0))
+    )
+    baseline = pd.to_numeric(baseline_source, errors="coerce").fillna(1.0)
     residual = payload["model"].predict(x)
     output["trained_rating_correction"] = correction_weight * residual
     output["trained_base_rating"] = (
@@ -257,14 +363,33 @@ def predict_map_win_probabilities(
     team_features: dict,
     map_order: list[str],
     picked_by: list[str] | None = None,
+    baseline_probabilities: dict[str, float] | None = None,
+    team_anchor_probability: float | None = None,
     model_path: str = MAP_MODEL_PATH,
 ) -> tuple[dict[str, float], dict]:
-    baseline_probabilities = dict(team_features.get("map_probabilities", {}))
+    baseline_probabilities = dict(
+        baseline_probabilities
+        if baseline_probabilities is not None
+        else team_features.get("map_probabilities", {})
+    )
     elo_probability = float(team_features.get("elo_probability", 0.5))
+    team_anchor_probability = float(
+        team_anchor_probability
+        if team_anchor_probability is not None
+        else team_features.get("team_anchor_probability", elo_probability)
+    )
+    map_reliabilities = dict(team_features.get("map_reliabilities", {}))
+    map_signal_probabilities = dict(
+        team_features.get("map_signal_probabilities", {})
+    )
+    map_team_games = dict(team_features.get("map_team_games", {}))
+    map_opponent_games = dict(team_features.get("map_opponent_games", {}))
     payload = load_model_payload(model_path)
     if payload is None or not map_order:
         return {
-            map_name: float(baseline_probabilities.get(map_name, elo_probability))
+            map_name: float(
+                baseline_probabilities.get(map_name, team_anchor_probability)
+            )
             for map_name in map_order
         }, {"map_model_used": False, "map_model_reliability": 0.0}
 
@@ -272,12 +397,27 @@ def predict_map_win_probabilities(
     rows = []
     for index, map_name in enumerate(map_order, start=1):
         picker = picked_by[index - 1] if index - 1 < len(picked_by) else ""
+        baseline_probability = float(
+            baseline_probabilities.get(map_name, team_anchor_probability)
+        )
         row = {
             **team_features,
             "map_name": map_name,
             "map_number": float(index),
-            "map_baseline_probability": float(
-                baseline_probabilities.get(map_name, elo_probability)
+            "map_team_anchor_probability": team_anchor_probability,
+            "map_baseline_probability": baseline_probability,
+            "map_signal_probability": float(
+                map_signal_probabilities.get(map_name, baseline_probability)
+            ),
+            "map_specific_probability_delta": (
+                baseline_probability - team_anchor_probability
+            ),
+            "map_history_reliability": float(
+                map_reliabilities.get(map_name, 0.0)
+            ),
+            "map_team_history_games": float(map_team_games.get(map_name, 0.0)),
+            "map_opponent_history_games": float(
+                map_opponent_games.get(map_name, 0.0)
             ),
             "map_pick_by_team": float(picker == "team1"),
             "map_pick_by_opponent": float(picker == "team2"),
@@ -297,13 +437,22 @@ def predict_map_win_probabilities(
     else:
         raw = baseline.to_numpy(dtype=float) + payload["model"].predict(x)
     if model_kind != "baseline" and "model_blend_weight" in payload:
-        calibrated = apply_probability_blend_temperature(
-            np.clip(raw, 0.03, 0.97),
-            baseline.to_numpy(dtype=float),
-            blend_weight=payload.get("model_blend_weight", 1.0),
-            temperature=payload.get("probability_temperature", 1.0),
-            max_model_delta=payload.get("max_model_delta", 0.20),
-        )
+        if payload.get("hierarchical_team_anchor", False):
+            calibrated = apply_team_anchored_map_correction(
+                np.clip(raw, 0.03, 0.97),
+                baseline.to_numpy(dtype=float),
+                frame["map_history_reliability"].to_numpy(dtype=float),
+                blend_weight=payload.get("model_blend_weight", 1.0),
+                max_model_delta=payload.get("max_model_delta", 0.10),
+            )
+        else:
+            calibrated = apply_probability_blend_temperature(
+                np.clip(raw, 0.03, 0.97),
+                baseline.to_numpy(dtype=float),
+                blend_weight=payload.get("model_blend_weight", 1.0),
+                temperature=payload.get("probability_temperature", 1.0),
+                max_model_delta=payload.get("max_model_delta", 0.20),
+            )
     else:
         calibrated = apply_symmetric_calibration(
             payload.get("calibrator"),
@@ -326,4 +475,7 @@ def predict_map_win_probabilities(
         "map_model_candidate": metrics.get("selected_candidate", ""),
         "map_model_recommended_candidate": metrics.get("recommended_candidate", ""),
         "map_model_selection_mode": metrics.get("selection_mode", "auto"),
+        "map_model_team_anchored": bool(
+            payload.get("hierarchical_team_anchor", False)
+        ),
     }

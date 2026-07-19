@@ -1,0 +1,39 @@
+{
+  "source": {
+    "rows": 38230,
+    "matches": 1566,
+    "maps": 3823,
+    "training_ready_matches": 940,
+    "player_id_coverage": 0.8398639811666231,
+    "event_metadata_coverage": 0.632183908045977,
+    "tier_coverage": 0.6047254150702427,
+    "patch_coverage": 1.0,
+    "map_pick_coverage": 0.6353648966780016,
+    "map_score_coverage": 1.0,
+    "duplicate_player_map_rows": 0
+  },
+  "training": {
+    "rows": 24160,
+    "matches": 940,
+    "maps": 2416,
+    "training_ready_matches": 940,
+    "player_id_coverage": 1.0,
+    "event_metadata_coverage": 1.0,
+    "tier_coverage": 1.0,
+    "patch_coverage": 1.0,
+    "map_pick_coverage": 0.9656456953642384,
+    "map_score_coverage": 1.0,
+    "duplicate_player_map_rows": 0
+  },
+  "validation": {
+    "input_matches": 940,
+    "classified_matches": 940,
+    "training_ready_matches": 940,
+    "rejected": {
+      "teams": 0,
+      "players": 0,
+      "date": 0,
+      "score": 0
+    }
+  }
+}
