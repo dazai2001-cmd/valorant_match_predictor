@@ -31,6 +31,7 @@ TEAM_PAGES = {
 }
 
 MATCHES_CSV = DATA_DIR / "vlr_matches.csv"
+EXCLUDED_MATCHES_CSV = DATA_DIR / "vlr_matches_excluded.csv"
 MATCH_COVERAGE_CSV = DATA_DIR / "vlr_match_coverage.csv"
 UPCOMING_MATCHES_CSV = DATA_DIR / "vlr_upcoming_matches.csv"
 NEWS_CSV = DATA_DIR / "vlr_news.csv"
@@ -43,6 +44,8 @@ DATABASE_PATH = DATA_DIR / "valorant_predictor.sqlite3"
 VCT_EVENTS_CSV = DATA_DIR / "vct_events.csv"
 DATA_QUALITY_PATH = ARTIFACTS_DIR / "data_quality.json"
 JOB_STATUS_PATH = DATA_DIR / "job_status.json"
+TEAM_RANKINGS_CSV = DATA_DIR / "team_rankings.csv"
+TEAM_RANKINGS_META_PATH = DATA_DIR / "team_rankings_meta.json"
 
 PLAYER_MODEL_PATH = MODELS_DIR / "player_rating_model.pkl"
 TEAM_MODEL_PATH = MODELS_DIR / "team_win_model.pkl"

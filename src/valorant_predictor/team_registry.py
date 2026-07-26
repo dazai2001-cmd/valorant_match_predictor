@@ -6,7 +6,7 @@ from urllib.parse import quote_plus
 import pandas as pd
 
 from .config import BASE_URL, TEAM_PAGES, TEAMS_CSV
-from .vlr_client import absolute_url, get_soup, make_session
+from .vlr_client import absolute_url, get_soup, make_session, partition_registry_tier1_history
 
 
 REGISTRY_COLUMNS = [
@@ -264,61 +264,15 @@ def filter_registry_tier1_matchups(
     matches: pd.DataFrame,
     path: str = TEAMS_CSV,
 ) -> pd.DataFrame:
-    """Exclude unclassified matches against non-Tier-1 teams when a season registry exists."""
+    """Keep known-season Tier 1-v-Tier 1 and promotion matches only."""
     required = {"team", "opponent"}
     if matches.empty or not required.issubset(matches.columns):
         return matches
 
     registry = load_team_registry(path)
-    registry = registry[
-        (registry["tier"].astype(str).str.lower() == "tier1")
-        & (registry["active"].astype(str).str.lower() == "true")
-    ]
     if registry.empty:
         return matches
-
-    output = matches.copy()
-    date_values = output.get(
-        "match_date",
-        pd.Series(pd.NaT, index=output.index),
-    )
-    dates = pd.to_datetime(date_values, utc=True, errors="coerce")
-    season_values = output.get(
-        "season_year",
-        pd.Series(float("nan"), index=output.index),
-    )
-    years = pd.to_numeric(season_values, errors="coerce").fillna(dates.dt.year)
-    tiers = output.get(
-        "competition_tier",
-        pd.Series("unknown", index=output.index),
-    ).fillna("unknown").astype(str).str.lower()
-    event_tiers = output.get(
-        "event_tier",
-        pd.Series("unknown", index=output.index),
-    ).fillna("unknown").astype(str).str.lower()
-    curated = tiers.isin({"tier1", "promotion"}) | event_tiers.eq("tier1")
-
-    registry_by_year = {
-        int(year): {team_key(name) for name in group["team"].astype(str)}
-        for year, group in registry.groupby(
-            pd.to_numeric(registry["season_year"], errors="coerce"),
-            dropna=True,
-        )
-        if pd.notna(year)
-    }
-    known_years = set(registry_by_year)
-    has_registry = years.isin(known_years)
-    tier1_matchup = pd.Series(False, index=output.index)
-    team_keys = output["team"].map(team_key)
-    opponent_keys = output["opponent"].map(team_key)
-    for year, names in registry_by_year.items():
-        year_mask = years.eq(year)
-        tier1_matchup |= year_mask & team_keys.isin(names) & opponent_keys.isin(names)
-
-    keep = curated | ~has_registry | tier1_matchup
-    filtered = output[keep].copy().reset_index(drop=True)
-    filtered.attrs.update(matches.attrs)
-    filtered.attrs["excluded_non_tier1_rows"] = int((~keep).sum())
+    filtered, _ = partition_registry_tier1_history(matches, registry)
     return filtered
 
 

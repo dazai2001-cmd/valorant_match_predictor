@@ -51,7 +51,7 @@ Seed the VCT Tier 1 registry first. This stores the 48 Tier 1 teams and resolves
 python scripts\seed_teams.py
 ```
 
-Scrape every match currently exposed on each active Tier 1 team's VLR match page:
+Discover the selected season on each active Tier 1 team's VLR match page, then scrape only Tier 1-v-Tier 1 and Ascension results:
 
 ```powershell
 python scripts\scrape.py --matches --season-year 2026
@@ -68,20 +68,20 @@ Ascension matches involving a team promoted into the next Tier 1 season are
 retained, with a lower competition weight. Event metadata comes from
 `vlrggapi`; unseen player/map rows still come from the direct VLR match parser.
 
-There is no default per-team cap. Match rows are saved to `data/vlr_matches.csv`. Each row represents one player's stats on one map; VLR's duplicate `?game=` links and the `All Maps` aggregate table are excluded. Coverage is saved to `data/vlr_match_coverage.csv` and counts unique match IDs for the selected season. The 20-match value is a data-quality benchmark only; it never excludes a team or prevents training.
+There is no default per-team cap. Candidate cards are filtered by date, explicit Tier 2/Game Changers labels, and the season-specific Tier 1 registry before their match pages are requested. Match rows are saved to `data/vlr_matches.csv`. Each row represents one player's stats on one map; VLR's duplicate `?game=` links and the `All Maps` aggregate table are excluded. Previously stored known-season matches that fail the registry rule are preserved in the ignored `data/vlr_matches_excluded.csv` archive instead of entering training. Coverage is saved to `data/vlr_match_coverage.csv` and counts unique match IDs for the selected season. The 20-match value is a data-quality benchmark only; it never excludes a team or prevents training.
 
 CSV files remain the portable import/export layer. Scrapes and predictions are also synchronized to `data/valorant_predictor.sqlite3`, which keeps normalized match, map, player-map, roster, news-event, prediction, dataset-version, and model-run tables.
 
 Updates merge into the existing CSV. Complete matches are reused, unseen matches are downloaded, and newly downloaded versions replace legacy rows for the same match ID. Use `--replace-history` only when you intentionally want a fresh file, or `--refresh-existing` to re-download complete matches.
 
-The direct VLR parser records the veto note, map picker, decider, and veto order when VLR exposes them. The bundled self-hosted [vlrggapi](https://github.com/axsddlr/vlrggapi) service can enrich the same fields when the upstream endpoint exposes them:
+The direct VLR parser records the veto note, map picker, decider, and veto order when VLR exposes them. Missing veto data does not make an otherwise complete match download again. The bundled self-hosted [vlrggapi](https://github.com/axsddlr/vlrggapi) service remains the source for official event discovery. Its expensive match-detail enrichment is manual and normally unnecessary:
 
 ```powershell
 $env:VLRGGAPI_BASE_URL = "http://127.0.0.1:3001"
-python scripts\scrape.py --matches --refresh-existing
+python scripts\scrape.py --matches --refresh-existing --use-vlrggapi-enrichment
 ```
 
-The scraper checks the helper once per run and falls back to direct VLR parsing when it is unavailable. Existing historical rows are kept and marked `legacy`/`unknown` until refreshed; the app never invents old vetoes.
+Normal team-page updates do not contact the helper. When enrichment is explicitly enabled, the scraper checks it once and falls back to direct VLR parsing when unavailable. Existing historical rows are kept and marked `legacy`/`unknown` until refreshed; the app never invents old vetoes.
 
 Files produced by the older scraper are marked as legacy because they do not contain map IDs. The first repaired update re-downloads those recent matches; only map-complete matches count toward the coverage target.
 
@@ -172,7 +172,9 @@ Then open:
 http://127.0.0.1:5000
 ```
 
-The web app can run predictions, choose an explicit map order for Bo1/Bo3/Bo5, update data, compare candidate models, and display series, map, team, and player forecasts. Leave every map on **Auto** before a veto; select every map after a veto is known. Partial or duplicate map selections are rejected.
+The web app can run predictions, choose an explicit map order for Bo1/Bo3/Bo5, update data, compare candidate models, and display series, map, team, player, and power-ranking forecasts. Leave every map on **Auto** before a veto; select every map after a veto is known. Partial or duplicate map selections are rejected.
+
+Power rankings score every unique pairing among the 48 active Tier 1 teams as a neutral Bo3 with the deployed series model. A team's power score is its average predicted win probability against the other 47 teams. Regional tabs filter that globally comparable score and assign a regional position; raw database win totals do not determine rank. The cached ranking snapshot is rebuilt after every database update or training run, while the previous snapshot remains available during the background job.
 
 Use **Update database & model** to resume missing 2025 event matches, merge new 2026 matches and player-map rows, preserve and refresh rosters, update news and the upcoming schedule, then retrain only when the usable dataset or model choice changed. The job runs in the background and reports progress in the page.
 
@@ -205,11 +207,17 @@ The trainer fingerprints the usable dataset and skips retraining when neither th
 
 The player trainer compares squared-loss gradient boosting, absolute-loss gradient boosting, and Extra Trees on a chronological calibration fold. It predicts the residual change from a leakage-safe last-10 baseline and trains separate lower and upper quantile models for the rating range.
 
-The series and map trainers compare an Elo-residual model, a direct gradient-boosted classifier, and logistic regression. Each chooses the lowest calibration log loss, then reports accuracy, log loss, and Brier score on a later untouched test fold. The map model is trained on one row per team per real map, with both sides of a match kept in the same split.
+The series trainer compares direct logistic feature fusion, direct gradient boosting, a neutral residual learner, and XGBoost. Auto applies a simplicity margin: a more complex candidate must improve development log loss by at least `0.005` before replacing logistic regression. It also tests regularized regional offsets and a player-stacked feature set containing projected lineup mean, floor, ceiling, correction, reliability, and coverage. The stacked values are expanding-window out-of-fold (OOF) player predictions: the player model producing a historical feature never trained on that match. Elo is one point-in-time input and an evaluation baseline, not the probability anchor.
 
-Probability candidates are blended with their baseline, temperature-scaled symmetrically, and capped so the raw learner cannot move more than 20 percentage points away from its baseline before blending. At prediction time, the learned map forecast is also weighted by its measured held-out reliability instead of replacing the stable forecast wholesale.
+Model and feature-set selection combines the latest pre-test calibration window with older rolling windows, weighted 65/35 toward the latest period. Every candidate is then compared on the same later chronological holdout using accuracy, log loss, and Brier score, but those comparison results do not affect Auto selection. Both sides of every match remain in the same split. A regional, player-stack, calibration, or ensemble challenger that wins development but fails to improve the later holdout is rejected in favor of the simpler passing model.
 
-A trained series or map model is enabled only when it beats its baseline on both held-out log loss and Brier score. Otherwise the predictor falls back to the explainable Elo/form calculation.
+The optional OOF probability ensemble combines four strictly pre-match probabilities: direct series fusion, map-derived series probability, dynamic Elo strength, and a separate lineup/player projection model. Its no-intercept logistic meta-model is trained only on expanding-window OOF component predictions. It is deployed only when it improves both development and untouched-test log loss and Brier score.
+
+The map trainer separately compares a map-residual model, a direct gradient-boosted classifier, and logistic regression. Its historical team anchors are also expanding-window OOF predictions, converted from series probability to equivalent per-map probability before map-form and veto adjustments. Early rows without enough prior history fall back to Elo and carry an explicit OOF-availability feature.
+
+Series calibration compares neutral shrinkage plus temperature scaling, symmetric Platt scaling, and symmetric beta calibration. A selected calibration method is reverted if it worsens both log loss and Brier score on the later holdout. Team perspectives remain exactly complementary. Map candidates remain team-anchored, reliability-scaled, and capped so sparse map history cannot overpower overall team quality.
+
+A trained series model is enabled only when it beats its baseline on held-out log loss and Brier score and is supported by either the latest pre-test window or enough rolling windows. A map learner must beat its team-anchored baseline on both held-out and rolling safeguards. Otherwise the predictor falls back to the explainable baseline.
 
 The web app shows a 20-game coverage benchmark in the Tier 1 Teams panel. Low coverage means confidence should be lower; all valid available rows are still used.
 
@@ -221,12 +229,16 @@ Training uses:
 - Last 60 days as a recent-form feature
 - Only matches before the target match when building features
 - Chronological train/calibration/test splits grouped by match, so mirrored team rows and players from one match cannot leak across folds
+- Expanding-window OOF player predictions for team-model stacking and OOF team probabilities for map-model anchors
 - Dedicated map examples with map identity, map form, opponent interaction, picker/decider context when known, and roster state
 - Candidate-model selection on calibration data, followed by one final evaluation on later test data
 - Rolling-origin backtests to measure stability across several points in time
 - Last-10 player form, coin-flip probability, and Elo as explicit baselines
 - Accuracy, MAE, log loss, Brier score, and skill against those baselines
-- Low-variance baseline blending and symmetric temperature calibration fitted only on the calibration fold
+- Low-variance baseline blending plus symmetric temperature, Platt, and beta calibration candidates
+- Match-grouped bootstrap 95% intervals for accuracy, log loss, and Brier score
+- Selective-accuracy audits at 55%, 60%, and 65% predicted confidence
+- Same-holdout history tests comparing all clean seasons with current-season-only training
 - Quantile intervals adjusted on calibration data and measured on untouched test data
 
 Old player and team history is retained because it can still contain useful matchup and identity information, but it is never treated as equally current. VLR's 60-day player/agent view remains a recent-form feature rather than the whole model.
@@ -266,10 +278,11 @@ The match predictor:
 3. Replays match history sequentially to build leakage-safe Elo, strength-of-schedule, roster-continuity, and map-pool features.
 4. Decays Elo and map-pool evidence with age, with controlled carry-over across seasons, patches, and roster changes.
 5. Uses the chosen Bo1/Bo3/Bo5 map order when supplied; otherwise estimates an order from recent map appearances, picks, and deciders and represents that uncertainty.
-6. Produces an opponent-specific probability for each map with the dedicated map model when it passed held-out safeguards.
-7. Combines the map series with the independently trained series model and the explainable Elo/form score according to measured held-out skill.
-8. Shrinks weak evidence toward 50/50 and applies probability calibration when available.
-9. Runs correlated Monte Carlo simulations with map-specific probabilities, shared team/series shocks, and player-performance volatility for Bo1, Bo3, or Bo5.
+6. Tests regional pooling, projected-lineup stacking, and the four-way OOF probability ensemble, retaining each only after development and later-holdout safeguards.
+7. Produces an opponent-specific probability for each map with the dedicated map model when it passed held-out safeguards.
+8. Uses the selected series architecture as the team-level forecast, converts that probability to its equivalent per-map anchor, and lets reliable map/veto evidence adjust it before simulation. Elo remains a model input and fallback rather than a forced blend.
+9. Shrinks weak evidence toward 50/50 and applies the held-out-safe calibration method.
+10. Runs correlated Monte Carlo simulations with map-specific probabilities, shared team/series shocks, and player-performance volatility for Bo1, Bo3, or Bo5.
 
 Small datasets are deliberately dampened toward 50/50. The map list in the UI is derived from stored competitive data rather than a hardcoded patch pool, because tournament pools can differ by event.
 

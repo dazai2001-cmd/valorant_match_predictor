@@ -12,6 +12,7 @@ from .config import (
 )
 from .data_quality import data_quality_report, enrich_match_metadata
 from .storage import sync_match_data
+from .prediction.team_rankings import build_team_rankings
 from .team_registry import (
     VCT_TIER1_SEASON,
     load_team_registry,
@@ -28,7 +29,7 @@ from .vlr_client import (
 )
 
 
-UPDATE_STAGES = 6
+UPDATE_STAGES = 7
 STAGE_UNITS = 1000
 
 
@@ -135,6 +136,11 @@ def update_database_and_model(
         force=False,
         model_selection=model_selection,
     )
+    _stage_boundary(progress, 6, "rankings", "Rebuilding global and regional power rankings")
+    rankings = build_team_rankings(
+        season_year=VCT_TIER1_SEASON,
+        progress=_stage_progress(progress, 6),
+    )
     missing_history = int(history_summary.get("missing_matches", 0)) - int(
         history_summary.get("parsed_matches", 0)
     )
@@ -156,6 +162,8 @@ def update_database_and_model(
         "training_status": metrics.get("training_status"),
         "model_version": metrics.get("model_version"),
         "model_selection": metrics.get("model_selection", {}),
+        "ranking_teams": rankings.get("team_count", 0),
+        "ranking_matchups": rankings.get("matchup_count", 0),
         "warnings": warnings,
     }
 
@@ -164,7 +172,7 @@ def train_and_evaluate(
     progress,
     model_selection: dict | None = None,
 ) -> dict:
-    progress("training", 0, 1, "Training and evaluating candidate models")
+    progress("training", 0, 2000, "Training and evaluating candidate models")
     metrics = train_models(
         matches_csv=MATCHES_CSV,
         season_year=VCT_TIER1_SEASON,
@@ -175,6 +183,16 @@ def train_and_evaluate(
         force=True,
         model_selection=model_selection,
     )
+    progress("rankings", 1000, 2000, "Rebuilding global and regional power rankings")
+
+    def ranking_progress(step: str, current: int, total: int, message: str) -> None:
+        fraction = max(0.0, min(1.0, float(current) / float(total))) if total else 0.0
+        progress(step, 1000 + round(fraction * 1000), 2000, message)
+
+    rankings = build_team_rankings(
+        season_year=VCT_TIER1_SEASON,
+        progress=ranking_progress,
+    )
     return {
         "message": "Training and held-out evaluation completed.",
         "training_status": metrics.get("training_status"),
@@ -183,4 +201,6 @@ def train_and_evaluate(
         "player_metrics": metrics.get("player_metrics", {}),
         "team_metrics": metrics.get("team_metrics", {}),
         "map_metrics": metrics.get("map_metrics", {}),
+        "ranking_teams": rankings.get("team_count", 0),
+        "ranking_matchups": rankings.get("matchup_count", 0),
     }

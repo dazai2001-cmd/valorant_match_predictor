@@ -17,6 +17,7 @@ venv/
 
 *.tmp
 data/job_status.json
+data/vlr_matches_excluded.csv
 data/*.sqlite3
 data/*.sqlite3-shm
 data/*.sqlite3-wal

@@ -1,4 +1,43 @@
 (() => {
+  const rankings = document.querySelector("[data-rankings]");
+  if (!rankings) return;
+
+  const tabs = [...rankings.querySelectorAll("[data-ranking-region]")];
+  const rows = [...rankings.querySelectorAll("[data-ranking-row]")];
+  const scopeLabel = rankings.querySelector("[data-ranking-scope-label]");
+
+  const activate = (region) => {
+    tabs.forEach((tab) => {
+      const active = tab.dataset.rankingRegion === region;
+      tab.classList.toggle("is-active", active);
+      tab.setAttribute("aria-selected", String(active));
+      tab.tabIndex = active ? 0 : -1;
+    });
+    rows.forEach((row) => {
+      const visible = region === "Global" || row.dataset.region === region;
+      row.hidden = !visible;
+      if (visible) {
+        const rank = region === "Global" ? row.dataset.globalRank : row.dataset.regionalRank;
+        row.querySelector("[data-ranking-position]").textContent = `#${rank}`;
+      }
+    });
+    if (scopeLabel) scopeLabel.textContent = region.replace("VCT ", "");
+  };
+
+  tabs.forEach((tab, index) => {
+    tab.addEventListener("click", () => activate(tab.dataset.rankingRegion));
+    tab.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      event.preventDefault();
+      const offset = event.key === "ArrowRight" ? 1 : -1;
+      const next = tabs[(index + offset + tabs.length) % tabs.length];
+      activate(next.dataset.rankingRegion);
+      next.focus();
+    });
+  });
+})();
+
+(() => {
   const picker = document.querySelector("[data-map-picker]");
   if (!picker) return;
 

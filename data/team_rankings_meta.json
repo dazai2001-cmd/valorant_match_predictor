@@ -1,0 +1,18 @@
+{
+  "source_signature": "ae551819964634a25d57f8d31eb199deb18b1ce33cf593f3dd9a56cba8f1a63a",
+  "ranking_version": "model-round-robin-v1",
+  "season_year": 2026,
+  "generated_at": "2026-07-24T15:09:24.746290+00:00",
+  "as_of_date": "2026-07-25T05:00:00+00:00",
+  "team_count": 48,
+  "matchup_count": 1128,
+  "regions": [
+    "VCT Americas",
+    "VCT EMEA",
+    "VCT Pacific",
+    "VCT China"
+  ],
+  "model_candidate": "logistic_classifier",
+  "method": "Average neutral Bo3 win probability against every active Tier 1 team",
+  "stale": false
+}

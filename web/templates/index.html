@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Valorant Match Predictor</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='quality-models-v2') }}">
-  <script defer src="{{ url_for('static', filename='app.js', v='quality-models-v2') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='team-rankings-v1') }}">
+  <script defer src="{{ url_for('static', filename='app.js', v='team-rankings-v1') }}"></script>
 </head>
 <body>
   <main class="app-shell">
@@ -284,6 +284,68 @@
       </section>
     {% endif %}
 
+    {% if rankings and rankings.rows %}
+      <section class="table-panel rankings-panel" data-rankings>
+        <div class="rankings-heading">
+          <div>
+            <h2>Team Power Rankings</h2>
+            <small>Neutral Bo3 against the active Tier 1 field</small>
+          </div>
+          <div class="rankings-meta">
+            <strong data-ranking-scope-label>Global</strong>
+            <span>{{ rankings.team_count }} teams &middot; {{ rankings.matchup_count }} matchups</span>
+            {% if rankings.generated_display %}<span>{{ rankings.generated_display }}</span>{% endif %}
+          </div>
+        </div>
+
+        <div class="ranking-tabs" role="tablist" aria-label="Ranking scope">
+          <button class="ranking-tab is-active" type="button" role="tab" aria-selected="true" data-ranking-region="Global">Global</button>
+          {% for region in rankings.regions %}
+            <button class="ranking-tab" type="button" role="tab" aria-selected="false" tabindex="-1" data-ranking-region="{{ region }}">{{ region|replace("VCT ", "") }}</button>
+          {% endfor %}
+        </div>
+
+        <div class="table-wrap">
+          <table class="ranking-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Team</th>
+                <th>Region</th>
+                <th>Power</th>
+                <th>Favored</th>
+                <th>Recent form</th>
+                <th>Evidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rankings.rows %}
+                <tr data-ranking-row data-region="{{ row.region }}" data-global-rank="{{ row.global_rank }}" data-regional-rank="{{ row.regional_rank }}">
+                  <td class="ranking-position" data-ranking-position>#{{ row.global_rank }}</td>
+                  <td><strong>{{ row.team }}</strong></td>
+                  <td>{{ row.region|replace("VCT ", "") }}</td>
+                  <td>
+                    <div class="power-score">
+                      <strong>{{ "%.1f"|format(row.power_score) }}</strong>
+                      <span><i style="width: {{ row.power_score }}%"></i></span>
+                    </div>
+                  </td>
+                  <td>{{ row.favored_against }}/{{ row.opponents_rated }}</td>
+                  <td>{{ "%.1f"|format(row.recent_win_rate * 100) }}%</td>
+                  <td>{{ "%.0f"|format(row.evidence * 100) }}%</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if rankings.stale %}
+          <small class="rankings-state">Showing the previous snapshot while data and models update.</small>
+        {% endif %}
+      </section>
+    {% elif rankings and rankings.error %}
+      <section class="alert rankings-alert">Rankings unavailable: {{ rankings.error }}</section>
+    {% endif %}
+
     <details class="maintenance-panel" {% if job_running or job.status in ["completed", "failed"] %}open{% endif %}>
       <summary>
         <span>Data &amp; model</span>
@@ -381,12 +443,13 @@
                     <thead>
                       <tr>
                         <th>Model</th>
-                        <th>Validation {{ report.metric_label }}</th>
-                        {% if report.task != "player" %}
-                          <th>Validation accuracy</th>
-                        {% endif %}
-                        <th>Test {{ report.metric_label }}</th>
-                        {% if report.task != "player" %}<th>Test accuracy</th>{% endif %}
+                        <th>Latest validation</th>
+                        <th>Rolling mean</th>
+                        <th>Rolling variation</th>
+                        <th>Windows won</th>
+                        <th>Vs baseline</th>
+                        <th>Auto score</th>
+                        <th>Final holdout</th>
                         <th>Status</th>
                       </tr>
                     </thead>
@@ -394,16 +457,72 @@
                       {% for model in report.rows %}
                         <tr>
                           <td>{{ model.name }}</td>
-                          <td>{{ "%.4f"|format(model.validation_metric) if model.validation_metric is not none else "-" }}</td>
-                          {% if report.task != "player" %}
-                            <td>{{ "%.1f%%"|format(model.validation_accuracy * 100) if model.validation_accuracy is not none else "-" }}</td>
-                          {% endif %}
-                          <td>{{ "%.4f"|format(model.test_metric) if model.test_metric is not none else "-" }}</td>
-                          {% if report.task != "player" %}<td>{{ "%.1f%%"|format(model.test_accuracy * 100) if model.test_accuracy is not none else "-" }}</td>{% endif %}
+                          <td>
+                            {% if model.validation_metric is not none %}
+                              <span class="model-metric">{{ "%.4f"|format(model.validation_metric) }} {{ report.metric_label }}</span>
+                              {% if model.validation_r2 is not none %}<small>{{ "%.4f"|format(model.validation_r2) }} R&sup2;</small>{% endif %}
+                              {% if model.validation_brier is not none %}<small>{{ "%.4f"|format(model.validation_brier) }} Brier</small>{% endif %}
+                              {% if model.validation_accuracy is not none %}<small>{{ "%.1f%%"|format(model.validation_accuracy * 100) }} accuracy</small>{% endif %}
+                            {% else %}
+                              <span class="model-metric-muted">Not recorded</span>
+                            {% endif %}
+                          </td>
+                          <td>
+                            {% if model.rolling_metric is not none %}
+                              <span class="model-metric">{{ "%.4f"|format(model.rolling_metric) }} {{ report.metric_label }}</span>
+                              {% if model.rolling_brier is not none %}<small>{{ "%.4f"|format(model.rolling_brier) }} Brier</small>{% endif %}
+                              {% if model.rolling_accuracy is not none %}<small>{{ "%.1f%%"|format(model.rolling_accuracy * 100) }} accuracy</small>{% endif %}
+                            {% else %}
+                              <span class="model-metric-muted">Not recorded</span>
+                            {% endif %}
+                          </td>
+                          <td>
+                            {% if model.rolling_variation is not none %}
+                              <span class="model-metric">&plusmn;{{ "%.4f"|format(model.rolling_variation) }} {{ report.metric_label }}</span>
+                              {% if model.rolling_brier_variation is not none %}<small>&plusmn;{{ "%.4f"|format(model.rolling_brier_variation) }} Brier</small>{% endif %}
+                              {% if model.rolling_accuracy_variation is not none %}<small>&plusmn;{{ "%.1f"|format(model.rolling_accuracy_variation * 100) }} points accuracy</small>{% endif %}
+                            {% else %}
+                              <span class="model-metric-muted">Not recorded</span>
+                            {% endif %}
+                          </td>
+                          <td>
+                            {% if model.rolling_folds %}
+                              {{ model.rolling_wins or 0 }}/{{ model.rolling_folds }}
+                            {% else %}
+                              <span class="model-metric-muted">Reference</span>
+                            {% endif %}
+                          </td>
+                          <td>
+                            {% if model.id == report.rows[0].id %}
+                              <span class="model-metric-muted">Reference</span>
+                            {% elif model.improvement_vs_baseline is not none %}
+                              {{ "%+.2f%%"|format(model.improvement_vs_baseline * 100) }}
+                            {% else %}
+                              <span class="model-metric-muted">Not recorded</span>
+                            {% endif %}
+                          </td>
+                          <td>
+                            {% if model.selection_metric is not none %}
+                              {{ "%.4f"|format(model.selection_metric) }}
+                            {% else %}
+                              <span class="model-metric-muted">Reference</span>
+                            {% endif %}
+                          </td>
+                          <td>
+                            {% if model.test_metric is not none %}
+                              <span class="model-metric">{{ "%.4f"|format(model.test_metric) }} {{ report.metric_label }}</span>
+                              {% if model.test_r2 is not none %}<small>{{ "%.4f"|format(model.test_r2) }} R&sup2;</small>{% endif %}
+                              {% if model.test_brier is not none %}<small>{{ "%.4f"|format(model.test_brier) }} Brier</small>{% endif %}
+                              {% if model.test_accuracy is not none %}<small>{{ "%.1f%%"|format(model.test_accuracy * 100) }} accuracy</small>{% endif %}
+                            {% else %}
+                              <span class="model-metric-muted">Not recorded</span>
+                            {% endif %}
+                          </td>
                           <td>
                             {% if model.id == report.active %}<strong>Active</strong>{% endif %}
                             {% if model.id == report.evaluated and model.id != report.active %}Held-out rejected{% endif %}
                             {% if model.id == report.recommended and model.id not in [report.active, report.evaluated] %}Validation best{% endif %}
+                            {% if model.id not in [report.active, report.evaluated, report.recommended] %}{{ "Reference" if model.id == report.rows[0].id else "Not selected" }}{% endif %}
                           </td>
                         </tr>
                       {% endfor %}
@@ -411,17 +530,41 @@
                   </table>
                 </div>
                 <small class="model-report-meta">
+                  Auto score: {{ "rolling mean" if report.task == "player" else "65% latest validation + 35% rolling mean" }}.
+                  Every candidate uses the same chronological final holdout; these results do not affect Auto selection.
+                </small>
+                <small class="model-report-meta">
                   {{ report.test_rows or 0 }} test rows{% if report.test_matches %} across {{ report.test_matches }} matches{% endif %}
                   {% if report.skill_vs_baseline is not none %} / MAE skill vs hierarchical form: {{ "%+.1f"|format(report.skill_vs_baseline * 100) }}%{% endif %}
                   {% if report.interval_coverage is not none %} / 80% interval coverage: {{ "%.1f"|format(report.interval_coverage * 100) }}%{% endif %}
                   {% if report.brier_score is not none %} / Test Brier: {{ "%.4f"|format(report.brier_score) }}{% endif %}
-                  {% if report.reliability is not none %} / Measured reliability: {{ "%.1f"|format(report.reliability * 100) }}%{% endif %}
-                  {% if report.model_blend_weight is not none %} / Learner blend: {{ "%.0f"|format(report.model_blend_weight * 100) }}%{% endif %}
-                  {% if report.max_model_delta is not none %} / Raw delta cap: +/-{{ "%.0f"|format(report.max_model_delta * 100) }} points{% endif %}
+                  {% if report.reliability is not none %} / Held-out skill: {{ "%.1f"|format(report.reliability * 100) }}%{% endif %}
+                  {% if report.model_blend_weight is not none %} / Calibration weight: {{ "%.0f"|format(report.model_blend_weight * 100) }}%{% endif %}
+                  {% if report.max_model_delta is not none and report.probability_structure != "direct_feature_fusion" %} / Raw delta cap: +/-{{ "%.0f"|format(report.max_model_delta * 100) }} points{% endif %}
+                  {% if report.calibration_method %} / Calibration: {{ report.calibration_method|replace("_", " ") }}{% endif %}
+                  {% if report.feature_set %} / Feature set: {{ report.feature_set|replace("_", " ") }}{% endif %}
+                  {% if report.oof_coverage is not none %} / OOF coverage: {{ "%.1f"|format(report.oof_coverage * 100) }}%{% endif %}
+                  {% if report.stacked_accuracy_delta is not none %} / Stack vs base test accuracy: {{ "%+.1f"|format(report.stacked_accuracy_delta * 100) }} points{% endif %}
+                  {% if report.stacked_log_loss_delta is not none %} / Stack vs base test log loss: {{ "%+.4f"|format(report.stacked_log_loss_delta) }}{% endif %}
                   {% if report.candidate_rejected %} / Validation winner failed the later test; baseline is active{% endif %}
                   {% if report.rolling_folds %} / Rolling windows won: {{ report.rolling_wins or 0 }}/{{ report.rolling_folds }}{% endif %}
+                  {% if report.latest_window_passed %} / Latest pre-test safeguard passed{% endif %}
+                  {% if report.region_log_loss_delta is not none %} / Regional pooling test log loss: {{ "%+.4f"|format(report.region_log_loss_delta) }} vs base{% endif %}
+                  {% if report.bootstrap.accuracy %} / 95% accuracy range: {{ "%.1f"|format(report.bootstrap.accuracy.low * 100) }}-{{ "%.1f"|format(report.bootstrap.accuracy.high * 100) }}%{% endif %}
+                  {% if report.ensemble.status == "trained" %} / OOF ensemble: {{ "active" if report.ensemble.active else "rejected" }} ({{ "%.4f"|format(report.ensemble.log_loss) }} vs direct {{ "%.4f"|format(report.ensemble.direct_log_loss) }} test log loss){% endif %}
+                  {% if report.history_scope.recommended_scope %} / History test winner: {{ report.history_scope.recommended_scope|replace("_", " ") }}{% endif %}
                   {% if report.selection_mode == "manual" and not report.passed_safeguard %} / Manual override is active despite missing the safeguard{% endif %}
                 </small>
+                {% if report.selective_accuracy %}
+                  <small class="model-report-meta">
+                    Confidence audit:
+                    {% for row in report.selective_accuracy %}
+                      {{ "%.0f"|format(row.threshold * 100) }}%+:
+                      {{ "%.1f%%"|format(row.accuracy * 100) if row.accuracy is not none else "-" }}
+                      on {{ row.matches }} matches{% if not loop.last %} /{% endif %}
+                    {% endfor %}
+                  </small>
+                {% endif %}
               </section>
             {% endfor %}
           </div>

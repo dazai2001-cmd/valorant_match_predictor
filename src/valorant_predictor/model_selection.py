@@ -16,9 +16,10 @@ MODEL_CHOICES = {
     },
     "team": {
         "auto": "Auto",
-        "logistic_classifier": "Logistic Classifier",
-        "hgb_classifier": "HGB Classifier",
-        "hgb_residual": "HGB Elo-Residual",
+        "logistic_classifier": "Logistic Feature Fusion",
+        "hgb_classifier": "HGB Feature Fusion",
+        "hgb_residual": "HGB Fusion Residual",
+        "xgboost_classifier": "XGBoost Feature Fusion",
         "elo_baseline": "Elo / Form Baseline",
     },
     "map": {

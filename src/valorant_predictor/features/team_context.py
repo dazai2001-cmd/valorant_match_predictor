@@ -824,6 +824,63 @@ def current_team_context(
     )
 
 
+def prepare_team_state_for_prediction(
+    state: dict,
+    lineups_by_team: dict[str, set[str]] | None = None,
+    as_of_date=None,
+    current_patch: str = "",
+) -> dict:
+    """Prepare every team once for batch, read-only matchup evaluation."""
+    prepared = _upgrade_state(deepcopy(state))
+    lineups_by_team = lineups_by_team or {}
+    if as_of_date is None:
+        dates = [
+            _as_timestamp(value)
+            for value in prepared["elo_last_date"].values()
+            if _as_timestamp(value) is not None
+        ]
+        as_of_date = max(dates) if dates else pd.Timestamp.now(tz="UTC")
+
+    teams = set(prepared["elo"]) | set(lineups_by_team)
+    for team in teams:
+        lineup = lineups_by_team.get(team, prepared["lineups"].get(team, set()))
+        continuity = _continuity(lineup, prepared["lineups"].get(team))
+        _prepare_team_state(
+            prepared,
+            team,
+            as_of_date,
+            continuity,
+            current_patch=current_patch,
+        )
+    return prepared
+
+
+def team_context_from_prepared_state(
+    state: dict,
+    team_a: str,
+    team_b: str,
+    lineup_a: set[str] | None = None,
+    lineup_b: set[str] | None = None,
+    as_of_date=None,
+    current_patch: str = "",
+) -> dict:
+    """Read matchup features from a state prepared by prepare_team_state_for_prediction."""
+    state = _upgrade_state(state)
+    if lineup_a is None:
+        lineup_a = state["lineups"].get(team_a, set())
+    if lineup_b is None:
+        lineup_b = state["lineups"].get(team_b, set())
+    return _context_features(
+        state,
+        team_a,
+        team_b,
+        lineup_a,
+        lineup_b,
+        as_of_date=as_of_date,
+        current_patch=current_patch,
+    )
+
+
 def freeze_team_state(state: dict) -> dict:
     return {
         "elo": dict(state["elo"]),

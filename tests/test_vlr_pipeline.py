@@ -22,11 +22,16 @@ from valorant_predictor.vlr_client import (
     canonical_team_lookup,
     canonical_team_name,
     canonicalize_match_dataframe,
+    complete_match_ids,
+    filter_tier1_match_candidates,
     get_team_match_urls,
     match_coverage_report,
     merge_match_history,
     parse_match_page,
+    parse_team_match_candidates_page,
     parse_upcoming_matches_page,
+    partition_registry_tier1_history,
+    scrape_matches,
     scrape_rosters,
 )
 
@@ -103,6 +108,12 @@ def match_html():
         <a href="/team/14419/giantx/"><div class="wf-title-med">GIANTX</div></a>
       </div>
       <span data-utc-ts="2026-05-12 12:00:00"></span>
+      <div class="match-header-event">
+        <a href="/event/123/vct-2026-emea-stage-1">
+          VCT 2026: EMEA Stage 1
+          <div class="match-header-event-series">Playoffs: Upper Final</div>
+        </a>
+      </div>
       <div class="match-header-note">GIANTX ban Haven; PCIFIC pick Lotus; Ascent remains</div>
       <div class="vm-stats-game mod-active" data-game-id="all">{aggregate}</div>
       <div class="vm-stats-game" data-game-id="268077">
@@ -251,6 +262,43 @@ class VlrPipelineTests(unittest.TestCase):
 
         self.assertEqual(len(urls), 75)
 
+    def test_match_card_parser_extracts_prefetch_metadata(self):
+        html = """
+          <a class="wf-card fc-flex m-item" href="/701052/jdg-vs-trace-vct-2026">
+            <div class="m-item-event"><div>VCT 2026: China Stage 2</div>Group Stage</div>
+            <span class="m-item-team-name">JDG Esports</span>
+            <span class="m-item-team-name">Trace Esports</span>
+            <div class="m-item-date"><div>2026/07/21</div>2:00 am</div>
+          </a>
+        """
+
+        candidates = parse_team_match_candidates_page(BeautifulSoup(html, "html.parser"))
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["match_date"], "2026-07-21")
+        self.assertEqual(candidates[0]["event_name"], "VCT 2026: China Stage 2")
+        self.assertEqual(candidates[0]["teams"], ["JDG Esports", "Trace Esports"])
+
+    def test_prefetch_filter_rejects_wrong_season_and_non_tier1_matches(self):
+        candidates = [
+            {"match_id": 1, "match_date": "2026-01-01", "event_name": "VCT 2026: EMEA", "teams": ["Team A", "Team B"]},
+            {"match_id": 2, "match_date": "2025-01-01", "event_name": "VCT 2025: EMEA", "teams": ["Team A", "Team B"]},
+            {"match_id": 3, "match_date": "2026-01-02", "event_name": "Challengers 2026: Europe", "teams": ["Team A", "Team B"]},
+            {"match_id": 4, "match_date": "2026-01-03", "event_name": "EWC 2026: Europe Qualifier", "teams": ["Team A", "Academy Team"]},
+            {"match_id": 5, "match_date": "2026-01-04", "event_name": "VCT 2026: Ascension", "teams": ["Promoted Team", "Academy Team"]},
+        ]
+
+        relevant, rejected = filter_tier1_match_candidates(
+            candidates,
+            2026,
+            ["Team A", "Team B"],
+        )
+
+        self.assertEqual([candidate["match_id"] for candidate in relevant], [1, 5])
+        self.assertEqual(rejected["wrong_season"], 1)
+        self.assertEqual(rejected["explicit_non_tier1_event"], 1)
+        self.assertEqual(rejected["non_tier1_matchup"], 1)
+
     def test_upcoming_parser_keeps_only_tier1_matchups(self):
         html = """
           <div class="wf-label mod-large">Sat, July 11, 2026</div>
@@ -291,6 +339,8 @@ class VlrPipelineTests(unittest.TestCase):
         self.assertEqual(rows[0]["map_pick_team"], "PCIFIC Esports")
         self.assertEqual(rows[0]["map_pick_type"], "pick")
         self.assertEqual(rows[0]["map_veto_order"], 2)
+        self.assertEqual(rows[0]["event_name"], "VCT 2026: EMEA Stage 1")
+        self.assertEqual(rows[0]["event_series"], "Playoffs: Upper Final")
         self.assertFalse(any(row["player"].startswith("aggregate") for row in rows))
 
     def test_match_parser_supports_current_overview_rows(self):
@@ -369,6 +419,107 @@ class VlrPipelineTests(unittest.TestCase):
         self.assertNotIn("old", set(merged["player"]))
         self.assertIn("new", set(merged["player"]))
         self.assertIn("kept", set(merged["player"]))
+
+    def test_complete_match_does_not_require_veto_metadata(self):
+        rows = []
+        for index in range(10):
+            row = match_row(
+                100,
+                "https://www.vlr.gg/100/a-vs-b",
+                "Team A" if index < 5 else "Team B",
+                f"p{index}",
+                "2026-01-01",
+            )
+            row.update(
+                {
+                    "player_id": index + 1,
+                    "event_name": "VCT 2026: EMEA",
+                    "map_team_score": 13 if index < 5 else 9,
+                    "map_opp_score": 9 if index < 5 else 13,
+                    "map_veto": "",
+                }
+            )
+            rows.append(row)
+
+        self.assertEqual(complete_match_ids(pd.DataFrame(rows)), {100})
+
+    def test_registry_partition_quarantines_non_tier1_opponents(self):
+        registry = pd.DataFrame(
+            [
+                {"team": "Team A", "tier": "tier1", "active": True, "season_year": 2026},
+                {"team": "Team B", "tier": "tier1", "active": True, "season_year": 2026},
+            ]
+        )
+        tier1 = match_row(1, "https://www.vlr.gg/1/a-vs-b", "Team A", "p1", "2026-01-01")
+        tier1.update({"opponent": "Team B", "competition_tier": "unknown", "event_tier": "unknown"})
+        qualifier = match_row(2, "https://www.vlr.gg/2/a-vs-c", "Team A", "p2", "2026-01-02")
+        qualifier.update({"opponent": "Academy Team", "competition_tier": "tier1", "event_tier": "tier1"})
+        promotion = match_row(3, "https://www.vlr.gg/3/c-vs-d", "Promoted Team", "p3", "2026-01-03")
+        promotion.update({"opponent": "Academy Team", "competition_tier": "promotion", "event_tier": "promotion"})
+
+        relevant, excluded = partition_registry_tier1_history(
+            pd.DataFrame([tier1, qualifier, promotion]),
+            registry,
+        )
+
+        self.assertEqual(set(relevant["match_id"]), {1, 3})
+        self.assertEqual(set(excluded["match_id"]), {2})
+        self.assertEqual(relevant.loc[relevant["match_id"].eq(1), "competition_tier"].iloc[0], "tier1")
+
+    def test_normal_match_update_does_not_call_expensive_helper(self):
+        pages = {
+            "Team A": "https://www.vlr.gg/team/matches/1/team-a/",
+            "Team B": "https://www.vlr.gg/team/matches/2/team-b/",
+        }
+        candidate = {
+            "match_id": 100,
+            "match_url": "https://www.vlr.gg/100/a-vs-b",
+            "match_date": "2026-01-01",
+            "event_name": "VCT 2026: Test",
+            "teams": ["Team A", "Team B"],
+        }
+        rows = []
+        for index in range(10):
+            team = "Team A" if index < 5 else "Team B"
+            opponent = "Team B" if index < 5 else "Team A"
+            row = match_row(100, candidate["match_url"], team, f"p{index}", "2026-01-01")
+            row.update(
+                {
+                    "opponent": opponent,
+                    "player_id": index + 1,
+                    "event_name": candidate["event_name"],
+                    "event_tier": "tier1",
+                    "competition_tier": "tier1",
+                    "map_team_score": 13 if index < 5 else 9,
+                    "map_opp_score": 9 if index < 5 else 13,
+                }
+            )
+            rows.append(row)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            with (
+                patch("valorant_predictor.vlr_client.make_session", return_value=object()),
+                patch("valorant_predictor.vlr_client.get_team_match_candidates", return_value=[candidate]),
+                patch("valorant_predictor.vlr_client.parse_match_page", return_value=rows) as parser,
+                patch("valorant_predictor.vlr_client.vlrggapi_is_healthy") as health,
+                patch("valorant_predictor.vlr_client.fetch_vlrggapi_match_metadata") as details,
+                patch("valorant_predictor.vlr_client.time.sleep"),
+                patch("valorant_predictor.storage.sync_match_data"),
+            ):
+                output = scrape_matches(
+                    output_csv=root / "matches.csv",
+                    coverage_csv=root / "coverage.csv",
+                    excluded_csv=root / "excluded.csv",
+                    team_pages=pages,
+                    season_year=2026,
+                    pause_seconds=0,
+                )
+
+        self.assertEqual(len(output), 10)
+        parser.assert_called_once()
+        health.assert_not_called()
+        details.assert_not_called()
 
     def test_coverage_counts_match_ids_for_the_requested_season(self):
         pages = {"Team A": "https://www.vlr.gg/team/matches/1/team-a/"}

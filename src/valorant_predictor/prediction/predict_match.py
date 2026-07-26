@@ -23,10 +23,19 @@ from ..training.model_inference import (
     predict_map_win_probabilities,
     predict_team_win_probability,
 )
-from ..training.train_models import dataset_fingerprint, team_rows_from_cleaned
+from ..training.train_models import (
+    dataset_fingerprint,
+    player_stack_features_from_summaries,
+    team_rows_from_cleaned,
+)
 from ..vlr_client import canonicalize_match_dataframe, scrape_matches, scrape_news, scrape_rosters
 from .predict_player_ratings import load_csv, predict_player_ratings
-from .simulation import simulate_series, stable_seed
+from .simulation import (
+    equivalent_map_probability,
+    reverse_simulation_result,
+    simulate_series,
+    stable_seed,
+)
 
 
 def blend_map_model_probabilities(
@@ -45,9 +54,14 @@ def blend_map_model_probabilities(
     return blended, weight
 
 
-def summarize_team(team: str, player_predictions: pd.DataFrame, matches: pd.DataFrame) -> dict:
+def summarize_team(
+    team: str,
+    player_predictions: pd.DataFrame,
+    matches: pd.DataFrame,
+    team_form: dict | None = None,
+) -> dict:
     lineup = probable_lineup(player_predictions, team, lineup_size=5)
-    team_form = calculate_team_form(matches, team)
+    team_form = team_form or calculate_team_form(matches, team)
 
     if lineup.empty:
         avg_rating = 1.0
@@ -59,6 +73,8 @@ def summarize_team(team: str, player_predictions: pd.DataFrame, matches: pd.Data
         player_uncertainty = 0.18
         data_reliability = 0.0
         lineup_certainty = 0.0
+        trained_rating_correction = 0.0
+        player_model_coverage = 0.0
     else:
         avg_rating = float(lineup["predicted_rating"].mean())
         top_rating = float(lineup["predicted_rating"].max())
@@ -71,6 +87,16 @@ def summarize_team(team: str, player_predictions: pd.DataFrame, matches: pd.Data
         player_uncertainty = float(lineup["predicted_rating_std"].mean()) if "predicted_rating_std" in lineup else 0.18
         data_reliability = float(lineup["data_reliability"].mean()) if "data_reliability" in lineup else 0.0
         lineup_certainty = float(lineup["lineup_certainty"].mean()) if "lineup_certainty" in lineup else 1.0 - roster_uncertainty
+        trained_rating_correction = (
+            float(lineup["trained_rating_correction"].mean())
+            if "trained_rating_correction" in lineup
+            else 0.0
+        )
+        player_model_coverage = (
+            float(lineup["trained_base_rating"].notna().mean())
+            if "trained_base_rating" in lineup
+            else 0.0
+        )
     lineup_recent_maps = float(lineup["maps_60d"].mean()) if "maps_60d" in lineup and not lineup.empty else (float(lineup["recent_maps"].mean()) if not lineup.empty else 0.0)
     lineup_reliability = float(lineup["reliability"].mean()) if "reliability" in lineup and not lineup.empty else 0.0
 
@@ -94,6 +120,8 @@ def summarize_team(team: str, player_predictions: pd.DataFrame, matches: pd.Data
         "lineup_certainty": lineup_certainty,
         "lineup_recent_maps": lineup_recent_maps,
         "lineup_reliability": lineup_reliability,
+        "avg_trained_rating_correction": trained_rating_correction,
+        "player_model_coverage": player_model_coverage,
         **team_form,
     }
 
@@ -233,8 +261,8 @@ def predict_match(
         registry=load_team_registry(),
         rosters=load_csv(rosters_csv),
     )
-    raw_matches = filter_registry_tier1_matchups(
-        filter_curated_competition_history(raw_matches)
+    raw_matches = filter_curated_competition_history(
+        filter_registry_tier1_matchups(raw_matches)
     )
     raw_matches = filter_training_ready_matches(raw_matches)
     matches_fingerprint = dataset_fingerprint(raw_matches)
@@ -300,6 +328,10 @@ def predict_match(
     trained_team_probability = None
     trained_features = None
     if use_trained_models:
+        player_stack_features = player_stack_features_from_summaries(
+            team1_summary,
+            team2_summary,
+        )
         trained_team_probability, trained_features = predict_team_win_probability(
             matches,
             team1,
@@ -308,8 +340,11 @@ def predict_match(
             lineup2=lineup2,
             team_maps=team_matches,
             sequential_context=team_context,
+            player_stack_features=player_stack_features,
             target_date=prediction_date,
             current_patch=current_patch,
+            best_of=best_of,
+            map_order=selected_maps,
         )
         if trained_features:
             team_context = {**team_context, **trained_features}
@@ -340,16 +375,16 @@ def predict_match(
         elo_weight * elo_probability
         + (1.0 - elo_weight) * formula_probability
     )
-    if trained_team_probability is not None:
-        if bool(team_context.get("active_model_is_baseline")):
-            map_probability = trained_team_probability
-        else:
-            model_weight = (
-                0.80
-                if bool(team_context.get("manual_model_override"))
-                else min(0.80, max(0.0, 0.75 * model_reliability))
-            )
-            map_probability = model_weight * trained_team_probability + (1.0 - model_weight) * map_probability
+    trained_series_probability = None
+    team_model_deployment_weight = float(
+        team_context.get("team_model_deployment_weight", 0.0)
+    )
+    if trained_team_probability is not None and team_model_deployment_weight > 0.0:
+        trained_series_probability = float(trained_team_probability)
+        map_probability = equivalent_map_probability(
+            trained_series_probability,
+            best_of,
+        )
 
     contextual_map_probabilities = team_context.get("map_probabilities", {})
     if contextual_map_probabilities:
@@ -402,11 +437,21 @@ def predict_match(
         team1_summary.get("avg_player_uncertainty", 0.18)
         + team2_summary.get("avg_player_uncertainty", 0.18)
     ) / 2.0
+    canonical_teams = sorted([team1, team2], key=str.casefold)
+    simulation_is_reversed = team1 != canonical_teams[0]
+    canonical_map_probabilities = (
+        {
+            map_name: 1.0 - float(probability)
+            for map_name, probability in simulation_map_probabilities.items()
+        }
+        if simulation_is_reversed
+        else simulation_map_probabilities
+    )
     simulation = simulate_series(
-        simulation_map_probabilities,
+        canonical_map_probabilities,
         best_of=best_of,
         performance_volatility=performance_volatility,
-        seed=stable_seed(team1, team2, str(best_of), str(season_year)),
+        seed=stable_seed(*canonical_teams, str(best_of), str(season_year)),
         map_order=resolved_map_order,
         veto_uncertainty=(
             0.0
@@ -414,6 +459,8 @@ def predict_match(
             else 0.55 * (1.0 - float(team_context.get("map_selection_reliability", 0.0)))
         ),
     )
+    if simulation_is_reversed:
+        simulation = reverse_simulation_result(simulation)
     match_probability = float(simulation["team1_win_probability"])
     decisiveness = abs(match_probability - 0.5) * 2.0
     prediction_confidence = confidence["quality"] * (0.40 + 0.60 * decisiveness)
@@ -488,7 +535,11 @@ def predict_match(
         "map_pick_order": " | ".join(selected_picks) if selected_maps else "",
         "elo_probability": elo_probability,
         "elo_reliability": elo_reliability,
-        "trained_team1_map_probability": trained_team_probability,
+        "trained_team1_series_probability": trained_series_probability,
+        "trained_team1_map_probability": (
+            map_probability if trained_series_probability is not None else None
+        ),
+        "team_model_deployment_weight": team_model_deployment_weight,
         "team1_probability_low": simulation["probability_low"],
         "team1_probability_high": simulation["probability_high"],
         "likely_score": simulation["likely_score"],

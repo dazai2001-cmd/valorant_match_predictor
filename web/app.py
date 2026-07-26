@@ -18,6 +18,7 @@ from valorant_predictor.config import (
 )
 from valorant_predictor.prediction.predict_match import predict_match
 from valorant_predictor.prediction.predict_player_ratings import load_csv
+from valorant_predictor.prediction.team_rankings import team_rankings_payload
 from valorant_predictor.jobs import job_manager
 from valorant_predictor.maintenance import train_and_evaluate, update_database_and_model
 from valorant_predictor.model_selection import (
@@ -148,6 +149,14 @@ def requested_model_selection() -> dict[str, str]:
 
 
 def model_reports(metrics: dict) -> list[dict]:
+    def first_recorded(*values):
+        return next((value for value in values if value is not None), None)
+
+    def improvement(metric, baseline):
+        if metric is None or baseline in (None, 0):
+            return None
+        return (float(baseline) - float(metric)) / float(baseline)
+
     reports = []
     definitions = [
         ("player", "Player rating", "MAE", "mae", "baseline_mae", "last_10_baseline"),
@@ -158,29 +167,167 @@ def model_reports(metrics: dict) -> list[dict]:
         task_metrics = metrics.get(f"{task}_metrics", {}) if metrics else {}
         candidates = task_metrics.get("candidate_calibration", {})
         rows = []
+        reference_values = next(iter(candidates.values()), {})
+        if task == "player":
+            validation_key = "mae"
+            rolling_key = "rolling_mae_mean"
+            rolling_std_key = "rolling_mae_std"
+            baseline_validation = first_recorded(
+                task_metrics.get("validation_baseline_mae"),
+                reference_values.get("validation_baseline_mae"),
+            )
+            baseline_rolling = first_recorded(
+                reference_values.get("rolling_baseline_mae_mean"),
+                task_metrics.get("rolling_baseline_mae_mean"),
+            )
+            baseline_rolling_std = first_recorded(
+                reference_values.get("rolling_baseline_mae_std"),
+                task_metrics.get("rolling_baseline_mae_std"),
+            )
+            baseline_validation_accuracy = None
+            baseline_rolling_accuracy = None
+            baseline_validation_r2 = reference_values.get(
+                "validation_baseline_r2"
+            )
+            baseline_validation_brier = None
+            baseline_rolling_accuracy_std = None
+            baseline_rolling_brier = None
+            baseline_rolling_brier_std = None
+            baseline_test_r2 = task_metrics.get("baseline_r2")
+            baseline_test_brier = None
+        else:
+            validation_key = "log_loss"
+            rolling_key = "rolling_log_loss_mean"
+            rolling_std_key = "rolling_log_loss_std"
+            baseline_validation = first_recorded(
+                reference_values.get("validation_baseline_log_loss"),
+                task_metrics.get("latest_development_reference_log_loss")
+                if task == "team"
+                else None,
+            )
+            baseline_rolling = first_recorded(
+                reference_values.get("rolling_baseline_log_loss_mean"),
+                reference_values.get("rolling_reference_log_loss_mean"),
+                task_metrics.get("rolling_reference_log_loss_mean"),
+            )
+            baseline_rolling_std = reference_values.get(
+                "rolling_baseline_log_loss_std"
+            )
+            baseline_validation_accuracy = reference_values.get(
+                "validation_baseline_accuracy"
+            )
+            baseline_rolling_accuracy = reference_values.get(
+                "rolling_baseline_accuracy_mean"
+            )
+            baseline_validation_r2 = None
+            baseline_validation_brier = reference_values.get(
+                "validation_baseline_brier"
+            )
+            baseline_rolling_accuracy_std = reference_values.get(
+                "rolling_baseline_accuracy_std"
+            )
+            baseline_rolling_brier = reference_values.get(
+                "rolling_baseline_brier_mean"
+            )
+            baseline_rolling_brier_std = reference_values.get(
+                "rolling_baseline_brier_std"
+            )
+            baseline_test_r2 = None
+            baseline_test_brier = task_metrics.get(
+                "elo_brier_score" if task == "team" else "baseline_brier_score"
+            )
         baseline_test = task_metrics.get(baseline_key)
         rows.append(
             {
                 "id": baseline_id,
                 "name": MODEL_CHOICES[task].get(baseline_id, baseline_id),
-                "validation_metric": None,
-                "validation_accuracy": None,
+                "validation_metric": baseline_validation,
+                "validation_accuracy": baseline_validation_accuracy,
+                "validation_r2": baseline_validation_r2,
+                "validation_brier": baseline_validation_brier,
+                "rolling_metric": baseline_rolling,
+                "rolling_variation": baseline_rolling_std,
+                "rolling_accuracy": baseline_rolling_accuracy,
+                "rolling_accuracy_variation": baseline_rolling_accuracy_std,
+                "rolling_brier": baseline_rolling_brier,
+                "rolling_brier_variation": baseline_rolling_brier_std,
+                "rolling_folds": None,
+                "rolling_wins": None,
+                "improvement_vs_baseline": 0.0,
+                "selection_metric": None,
                 "test_metric": baseline_test,
                 "test_accuracy": task_metrics.get(
                     "elo_accuracy" if task == "team" else "baseline_accuracy"
                 ),
+                "test_r2": baseline_test_r2,
+                "test_brier": baseline_test_brier,
             }
         )
         for candidate_id, values in candidates.items():
             evaluated = candidate_id == task_metrics.get("selected_candidate")
+            rolling_metric = values.get(rolling_key)
+            candidate_baseline = first_recorded(
+                values.get(
+                    "rolling_baseline_mae_mean"
+                    if task == "player"
+                    else "rolling_baseline_log_loss_mean"
+                ),
+                values.get(
+                    "rolling_baseline_mae_mean"
+                    if task == "player"
+                    else "rolling_reference_log_loss_mean"
+                ),
+                baseline_rolling,
+            )
             rows.append(
                 {
                     "id": candidate_id,
                     "name": MODEL_CHOICES[task].get(candidate_id, candidate_id),
-                    "validation_metric": values.get("mae" if task == "player" else "log_loss"),
+                    "validation_metric": values.get(validation_key),
                     "validation_accuracy": values.get("accuracy"),
-                    "test_metric": task_metrics.get(test_key) if evaluated else None,
-                    "test_accuracy": task_metrics.get("accuracy") if evaluated and task != "player" else None,
+                    "validation_r2": values.get("r2"),
+                    "validation_brier": values.get("brier_score"),
+                    "rolling_metric": rolling_metric,
+                    "rolling_variation": values.get(rolling_std_key),
+                    "rolling_accuracy": values.get("rolling_accuracy_mean"),
+                    "rolling_accuracy_variation": values.get(
+                        "rolling_accuracy_std"
+                    ),
+                    "rolling_brier": values.get("rolling_brier_mean"),
+                    "rolling_brier_variation": values.get("rolling_brier_std"),
+                    "rolling_folds": values.get("rolling_folds"),
+                    "rolling_wins": values.get("rolling_wins"),
+                    "improvement_vs_baseline": improvement(
+                        rolling_metric,
+                        candidate_baseline,
+                    ),
+                    "selection_metric": (
+                        rolling_metric
+                        if task == "player"
+                        else values.get("selection_log_loss")
+                    ),
+                    "test_metric": first_recorded(
+                        values.get(
+                            "test_mae" if task == "player" else "test_log_loss"
+                        ),
+                        task_metrics.get(test_key) if evaluated else None,
+                    ),
+                    "test_accuracy": first_recorded(
+                        values.get("test_accuracy"),
+                        task_metrics.get("accuracy")
+                        if evaluated and task != "player"
+                        else None,
+                    ),
+                    "test_r2": first_recorded(
+                        values.get("test_r2"),
+                        task_metrics.get("r2") if evaluated and task == "player" else None,
+                    ),
+                    "test_brier": first_recorded(
+                        values.get("test_brier_score"),
+                        task_metrics.get("brier_score")
+                        if evaluated and task != "player"
+                        else None,
+                    ),
                 }
             )
         evaluated_id = task_metrics.get("selected_candidate", "")
@@ -231,9 +378,36 @@ def model_reports(metrics: dict) -> list[dict]:
                 "model_blend_weight": task_metrics.get("model_blend_weight") if task != "player" else None,
                 "probability_temperature": task_metrics.get("probability_temperature") if task != "player" else None,
                 "max_model_delta": task_metrics.get("max_model_delta") if task != "player" else None,
+                "probability_structure": task_metrics.get("probability_structure", ""),
+                "calibration_method": task_metrics.get("calibration", ""),
+                "feature_set": task_metrics.get("selected_feature_set", ""),
+                "stacked_accuracy_delta": task_metrics.get("stacked_holdout_accuracy_delta"),
+                "stacked_log_loss_delta": task_metrics.get("stacked_holdout_log_loss_delta"),
+                "oof_coverage": (
+                    task_metrics.get("player_oof_stack_coverage")
+                    if task == "team"
+                    else task_metrics.get("team_anchor_oof_coverage")
+                    if task == "map"
+                    else task_metrics.get("oof_stacking", {}).get("coverage")
+                ),
                 "rolling_folds": task_metrics.get("rolling_backtest_folds"),
                 "rolling_wins": task_metrics.get("rolling_wins"),
                 "rolling_passed": task_metrics.get("rolling_safeguard_passed"),
+                "latest_window_passed": task_metrics.get(
+                    "latest_development_safeguard_passed"
+                ),
+                "bootstrap": task_metrics.get("bootstrap_95pct", {}),
+                "selective_accuracy": task_metrics.get("selective_accuracy", []),
+                "region_log_loss_delta": task_metrics.get(
+                    "region_holdout_log_loss_delta"
+                ),
+                "ensemble": task_metrics.get("oof_probability_ensemble", {})
+                if task == "team"
+                else {},
+                "history_scope": task_metrics.get("history_scope_experiment", {})
+                if task == "team"
+                else {},
+                "active_architecture": task_metrics.get("active_architecture", ""),
             }
         )
     return reports
@@ -326,12 +500,31 @@ def upcoming_matches_payload(limit: int = 16) -> list[dict]:
     return round_records(output.head(limit))
 
 
+def rankings_context(job_running: bool = False) -> dict:
+    try:
+        payload = team_rankings_payload(allow_stale=job_running)
+        generated_at = pd.to_datetime(
+            payload.get("generated_at"),
+            utc=True,
+            errors="coerce",
+        )
+        payload["generated_display"] = (
+            generated_at.strftime("%d %b %Y, %H:%M UTC")
+            if pd.notna(generated_at)
+            else ""
+        )
+        return payload
+    except Exception as exc:
+        return {"rows": [], "regions": [], "error": str(exc)}
+
+
 def base_context(**extra) -> dict:
     teams = available_teams()
     default_team1 = request.form.get("team1") or (teams[0] if teams else "")
     default_team2 = request.form.get("team2") or ("Sentinels" if "Sentinels" in teams else (teams[1] if len(teams) > 1 else ""))
     metrics = metrics_payload()
     job = job_manager.snapshot()
+    job_running = job.get("status") in {"queued", "running"}
     context = {
         "teams": teams,
         "map_options": available_maps(),
@@ -355,10 +548,11 @@ def base_context(**extra) -> dict:
         "model_reports": model_reports(metrics),
         "data_quality": metrics.get("data_quality", {}) if metrics else {},
         "job": job,
-        "job_running": job.get("status") in {"queued", "running"},
+        "job_running": job_running,
         "match_coverage": match_coverage_payload(),
         "roster_coverage": roster_coverage_payload(),
         "upcoming_matches": upcoming_matches_payload(),
+        "rankings": rankings_context(job_running=job_running),
     }
     context.update(extra)
     return context

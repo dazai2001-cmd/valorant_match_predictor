@@ -539,6 +539,17 @@ def build_player_profiles_from_rosters(
     cleaned["player_norm"] = cleaned["player"].apply(normalize_player_name)
     cleaned["player_id"] = pd.to_numeric(cleaned.get("player_id"), errors="coerce")
     global_rating = cleaned["rating_for_model"].mean()
+    player_history_by_id = {
+        int(player_id): history
+        for player_id, history in cleaned[cleaned["player_id"].notna()].groupby(
+            "player_id",
+            sort=False,
+        )
+    }
+    player_history_by_name = {
+        player_norm: history
+        for player_norm, history in cleaned.groupby("player_norm", sort=False)
+    }
 
     rows = []
     for _, roster_row in roster.iterrows():
@@ -547,12 +558,14 @@ def build_player_profiles_from_rosters(
             pd.Series([roster_row.get("player_id")]),
             errors="coerce",
         ).iloc[0]
-        if pd.notna(roster_player_id) and cleaned["player_id"].notna().any():
-            player_matches = cleaned[cleaned["player_id"] == roster_player_id].copy()
-            if player_matches.empty:
-                player_matches = cleaned[cleaned["player_norm"] == player_norm].copy()
+        if pd.notna(roster_player_id):
+            player_matches = player_history_by_id.get(int(roster_player_id))
+            if player_matches is None or player_matches.empty:
+                player_matches = player_history_by_name.get(player_norm)
         else:
-            player_matches = cleaned[cleaned["player_norm"] == player_norm].copy()
+            player_matches = player_history_by_name.get(player_norm)
+        if player_matches is None:
+            player_matches = cleaned.iloc[:0]
         current_team_matches = player_matches[player_matches["team"] == roster_row["team"]]
 
         if player_matches.empty:
@@ -626,8 +639,12 @@ def team_map_rows(matches: pd.DataFrame, team: str) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values(["match_date_sort", "match_id"], na_position="first")
 
 
-def calculate_team_form(matches: pd.DataFrame, team: str, recent_matches: int = 10) -> dict:
-    rows = team_map_rows(matches, team)
+def calculate_team_form_from_rows(
+    team_rows: pd.DataFrame,
+    team: str,
+    recent_matches: int = 10,
+) -> dict:
+    rows = team_rows[team_rows["team"] == team].copy() if not team_rows.empty else team_rows
     if rows.empty:
         return {
             "recent_win_rate": 0.5,
@@ -661,6 +678,14 @@ def calculate_team_form(matches: pd.DataFrame, team: str, recent_matches: int = 
         "team_form_adjustment": adjustment,
         "recent_team_maps": len(recent),
     }
+
+
+def calculate_team_form(matches: pd.DataFrame, team: str, recent_matches: int = 10) -> dict:
+    return calculate_team_form_from_rows(
+        team_map_rows(matches, team),
+        team,
+        recent_matches=recent_matches,
+    )
 
 
 def probable_lineup(player_predictions: pd.DataFrame, team: str, lineup_size: int = 5) -> pd.DataFrame:

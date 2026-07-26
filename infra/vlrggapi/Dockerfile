@@ -29,6 +29,5 @@ COPY --from=source --chown=vlrggapi:vlrggapi /source/main.py .
 USER vlrggapi
 EXPOSE 3001
 CMD ["python", "main.py"]
-HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=5 \
+HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=5 \
   CMD python -c "import urllib.request, json; r = urllib.request.urlopen('http://127.0.0.1:3001/v2/health', timeout=3); assert json.loads(r.read())['status'] == 'success'"
-

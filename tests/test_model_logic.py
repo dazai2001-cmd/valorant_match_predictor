@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 
@@ -27,7 +28,13 @@ from valorant_predictor.features.team_context import (
 )
 from valorant_predictor.model_selection import normalize_model_selection
 from valorant_predictor.prediction.predict_match import blend_map_model_probabilities
-from valorant_predictor.prediction.simulation import simulate_series
+from valorant_predictor.prediction.team_rankings import aggregate_pairwise_rankings
+from valorant_predictor.prediction.simulation import (
+    equivalent_map_probability,
+    reverse_simulation_result,
+    series_probability_from_maps,
+    simulate_series,
+)
 from valorant_predictor.storage import load_table, sync_dataframe
 from valorant_predictor.team_registry import (
     filter_registry_tier1_matchups,
@@ -35,15 +42,68 @@ from valorant_predictor.team_registry import (
 )
 from valorant_predictor.training.train_models import (
     add_training_weights,
+    apply_probability_calibration,
     apply_probability_blend_temperature,
     apply_team_anchored_map_correction,
+    attach_player_oof_team_features,
+    bootstrap_probability_intervals,
+    ensemble_probability_features,
+    expanding_oof_splits,
     grouped_chronological_split,
     grouped_chronological_three_way_split,
+    player_stack_features_from_summaries,
+    reverse_team_feature_row,
     rolling_origin_splits,
+    selective_accuracy_report,
+    select_probability_calibration,
+    symmetrize_grouped_probabilities,
 )
+from valorant_predictor.training.model_inference import score_team_win_probability
 
 
 class ModelLogicTests(unittest.TestCase):
+    def test_pairwise_power_rankings_are_symmetric_and_regionally_ranked(self):
+        rankings = aggregate_pairwise_rankings(
+            {
+                "Team A": "VCT Americas",
+                "Team B": "VCT Americas",
+                "Team C": "VCT EMEA",
+            },
+            [
+                {"team": "Team A", "opponent": "Team B", "probability": 0.70},
+                {"team": "Team A", "opponent": "Team C", "probability": 0.80},
+                {"team": "Team B", "opponent": "Team C", "probability": 0.60},
+            ],
+        )
+
+        by_team = rankings.set_index("team")
+        self.assertEqual(list(rankings["team"]), ["Team A", "Team B", "Team C"])
+        self.assertAlmostEqual(float(rankings["power_score"].mean()), 50.0)
+        self.assertEqual(int(by_team.loc["Team A", "regional_rank"]), 1)
+        self.assertEqual(int(by_team.loc["Team B", "regional_rank"]), 2)
+        self.assertEqual(int(by_team.loc["Team C", "regional_rank"]), 1)
+        self.assertEqual(int(by_team.loc["Team A", "favored_against"]), 2)
+
+    def test_batch_team_scorer_preserves_the_deployed_baseline(self):
+        probability, metadata = score_team_win_probability(
+            {
+                "features": ["elo_probability"],
+                "model_kind": "baseline",
+                "metadata": {
+                    "team_metrics": {
+                        "selected_candidate": "elo_baseline",
+                        "model_reliability": 0.4,
+                    }
+                },
+            },
+            {"elo_probability": 0.73},
+            reverse_features={"elo_probability": 0.27},
+        )
+
+        self.assertAlmostEqual(probability, 0.73)
+        self.assertTrue(metadata["active_model_is_baseline"])
+        self.assertEqual(metadata["active_model_candidate"], "elo_baseline")
+
     def test_curated_history_excludes_older_unknown_competitions(self):
         frame = pd.DataFrame(
             [
@@ -162,6 +222,238 @@ class ModelLogicTests(unittest.TestCase):
         )
 
         self.assertTrue((abs(forward + reverse - 1.0) < 1e-10).all())
+
+    def test_team_feature_reversal_negates_edges_and_preserves_evidence(self):
+        reversed_features = reverse_team_feature_row(
+            {
+                "team_rating_diff": 0.12,
+                "elo_diff": -0.25,
+                "h2h_win_rate": 0.65,
+                "h2h_maps": 4.0,
+                "elo_reliability": 0.8,
+                "player_projection_diff": 0.08,
+                "player_projection_oof_coverage": 0.75,
+            }
+        )
+
+        self.assertAlmostEqual(reversed_features["team_rating_diff"], -0.12)
+        self.assertAlmostEqual(reversed_features["elo_diff"], 0.25)
+        self.assertAlmostEqual(reversed_features["h2h_win_rate"], 0.35)
+        self.assertEqual(reversed_features["h2h_maps"], 4.0)
+        self.assertEqual(reversed_features["elo_reliability"], 0.8)
+        self.assertAlmostEqual(reversed_features["player_projection_diff"], -0.08)
+        self.assertEqual(reversed_features["player_projection_oof_coverage"], 0.75)
+
+    def test_player_stack_summary_is_exactly_reversible(self):
+        team_a = {
+            "avg_player_rating": 1.08,
+            "bottom_player_rating": 0.93,
+            "top_player_rating": 1.24,
+            "avg_trained_rating_correction": 0.02,
+            "lineup_reliability": 0.80,
+            "player_model_coverage": 1.0,
+        }
+        team_b = {
+            "avg_player_rating": 1.01,
+            "bottom_player_rating": 0.89,
+            "top_player_rating": 1.18,
+            "avg_trained_rating_correction": -0.01,
+            "lineup_reliability": 0.72,
+            "player_model_coverage": 0.8,
+        }
+
+        forward = player_stack_features_from_summaries(team_a, team_b)
+        reverse = player_stack_features_from_summaries(team_b, team_a)
+
+        self.assertAlmostEqual(
+            forward["player_projection_diff"],
+            -reverse["player_projection_diff"],
+        )
+        self.assertAlmostEqual(
+            forward["player_projection_correction_diff"],
+            -reverse["player_projection_correction_diff"],
+        )
+        self.assertEqual(forward["player_projection_reliability"], 0.72)
+        self.assertEqual(forward["player_projection_oof_coverage"], 0.8)
+
+    def test_player_oof_aggregation_builds_mirrored_team_features(self):
+        team_rows = pd.DataFrame(
+            [
+                {"match_key": "m1", "team": "A", "opponent": "B"},
+                {"match_key": "m1", "team": "B", "opponent": "A"},
+            ]
+        )
+        player_rows = []
+        for team, projection in [("A", 1.10), ("B", 0.95)]:
+            for player_index in range(5):
+                player_rows.append(
+                    {
+                        "match_key": "m1",
+                        "team": team,
+                        "player": f"{team}{player_index}",
+                        "player_oof_prediction": projection + player_index * 0.01,
+                        "player_shrunk_rating": projection,
+                        "player_effective_maps": 12.0,
+                        "player_oof_model_available": 1.0,
+                        "target_rating": projection,
+                    }
+                )
+
+        stacked = attach_player_oof_team_features(
+            team_rows,
+            pd.DataFrame(player_rows),
+        )
+
+        self.assertGreater(stacked.iloc[0]["player_projection_diff"], 0.0)
+        self.assertAlmostEqual(
+            stacked.iloc[0]["player_projection_diff"],
+            -stacked.iloc[1]["player_projection_diff"],
+        )
+        self.assertEqual(stacked.iloc[0]["player_projection_oof_coverage"], 1.0)
+
+    def test_grouped_probability_symmetry_uses_both_team_perspectives(self):
+        frame = pd.DataFrame(
+            {
+                "match_key": ["one", "one", "two", "two"],
+            }
+        )
+        probabilities = symmetrize_grouped_probabilities(
+            [0.70, 0.35, 0.40, 0.55],
+            frame,
+        )
+
+        self.assertAlmostEqual(probabilities[0], 0.675)
+        self.assertAlmostEqual(probabilities[0] + probabilities[1], 1.0)
+        self.assertAlmostEqual(probabilities[2] + probabilities[3], 1.0)
+
+    def test_series_probability_is_converted_to_equivalent_map_anchor(self):
+        series_probability = 0.64
+        map_probability = equivalent_map_probability(series_probability, best_of=3)
+        reconstructed = 3.0 * map_probability**2 - 2.0 * map_probability**3
+
+        self.assertLess(map_probability, series_probability)
+        self.assertAlmostEqual(reconstructed, series_probability, places=10)
+
+    def test_exact_series_probability_respects_map_order(self):
+        probabilities = {"Ascent": 0.70, "Haven": 0.45, "Lotus": 0.60}
+
+        result = series_probability_from_maps(
+            probabilities,
+            best_of=3,
+            map_order=["Haven", "Ascent", "Lotus"],
+        )
+        reverse = series_probability_from_maps(
+            {name: 1.0 - value for name, value in probabilities.items()},
+            best_of=3,
+            map_order=["Haven", "Ascent", "Lotus"],
+        )
+
+        self.assertGreater(result, 0.5)
+        self.assertAlmostEqual(result + reverse, 1.0)
+
+    def test_probability_calibration_candidates_preserve_team_symmetry(self):
+        frame = pd.DataFrame(
+            [
+                {
+                    "match_key": f"id:{match_id}",
+                    "target_date": pd.Timestamp("2026-01-01", tz="UTC")
+                    + pd.Timedelta(days=match_id),
+                    "target_match_id": match_id,
+                }
+                for match_id in range(1, 21)
+                for _ in range(2)
+            ]
+        )
+        raw = np.asarray(
+            [value for match_id in range(1, 21) for value in (0.62, 0.38)]
+        )
+        targets = np.asarray(
+            [value for match_id in range(1, 21) for value in (1.0, 0.0)]
+        )
+        settings, candidates = select_probability_calibration(
+            raw,
+            np.full(len(raw), 0.5),
+            targets,
+            frame,
+        )
+        calibrated = apply_probability_calibration(
+            settings,
+            raw,
+            np.full(len(raw), 0.5),
+        )
+
+        self.assertIn(settings["method"], candidates)
+        self.assertTrue((abs(calibrated[::2] + calibrated[1::2] - 1.0) < 1e-10).all())
+
+    def test_ensemble_logit_components_reverse_exactly(self):
+        forward = pd.DataFrame(
+            [
+                {
+                    "direct_oof_series_probability": 0.62,
+                    "map_derived_series_probability": 0.57,
+                    "elo_probability": 0.54,
+                    "lineup_oof_probability": 0.60,
+                },
+                {
+                    "direct_oof_series_probability": 0.38,
+                    "map_derived_series_probability": 0.43,
+                    "elo_probability": 0.46,
+                    "lineup_oof_probability": 0.40,
+                },
+            ]
+        )
+
+        transformed = ensemble_probability_features(forward).to_numpy()
+
+        self.assertTrue((abs(transformed[0] + transformed[1]) < 1e-10).all())
+
+    def test_bootstrap_and_selective_metrics_count_each_match_once(self):
+        frame = pd.DataFrame({"match_key": ["a", "a", "b", "b"]})
+        targets = [1, 0, 0, 1]
+        probabilities = [0.70, 0.30, 0.54, 0.46]
+
+        intervals = bootstrap_probability_intervals(
+            frame,
+            targets,
+            probabilities,
+            samples=50,
+        )
+        selective = selective_accuracy_report(
+            frame,
+            targets,
+            probabilities,
+            thresholds=(0.60,),
+        )
+
+        self.assertIn("log_loss", intervals)
+        self.assertEqual(selective[0]["matches"], 1)
+        self.assertAlmostEqual(selective[0]["coverage"], 0.5)
+
+    def test_reversing_simulation_preserves_exact_team_symmetry(self):
+        forward = simulate_series(
+            {"Haven": 0.57, "Lotus": 0.53, "Split": 0.49},
+            best_of=3,
+            performance_volatility=0.2,
+            simulations=500,
+            scenario_count=100,
+            seed=17,
+            map_order=["Haven", "Lotus", "Split"],
+        )
+        reverse = reverse_simulation_result(forward)
+
+        self.assertAlmostEqual(
+            forward["team1_win_probability"] + reverse["team1_win_probability"],
+            1.0,
+        )
+        self.assertEqual(
+            reverse["likely_score"],
+            "-".join(reversed(forward["likely_score"].split("-"))),
+        )
+        self.assertAlmostEqual(
+            forward["map_probabilities"]["Haven"]
+            + reverse["map_probabilities"]["Haven"],
+            1.0,
+        )
 
     def test_map_reliability_requires_history_from_both_teams(self):
         one_sided = map_history_reliability(30, 0)
@@ -344,6 +636,33 @@ class ModelLogicTests(unittest.TestCase):
             self.assertLess(max(calibration_ids), min(test_ids))
             self.assertGreater(min(test_ids), previous_test_start)
             previous_test_start = min(test_ids)
+
+    def test_expanding_oof_splits_only_predict_future_matches(self):
+        frame = pd.DataFrame(
+            [
+                {
+                    "match_key": f"id:{match_id}",
+                    "target_date": pd.Timestamp("2025-01-01", tz="UTC")
+                    + pd.Timedelta(days=match_id),
+                    "target_match_id": match_id,
+                }
+                for match_id in range(1, 41)
+                for _ in range(2)
+            ]
+        )
+
+        splits = expanding_oof_splits(frame, folds=4)
+
+        self.assertEqual(len(splits), 4)
+        for train, calibration, test in splits:
+            train_ids = set(frame.loc[train, "target_match_id"])
+            calibration_ids = set(frame.loc[calibration, "target_match_id"])
+            test_ids = set(frame.loc[test, "target_match_id"])
+            self.assertFalse(train_ids & calibration_ids)
+            self.assertFalse(train_ids & test_ids)
+            self.assertFalse(calibration_ids & test_ids)
+            self.assertLess(max(train_ids), min(calibration_ids))
+            self.assertLess(max(calibration_ids), min(test_ids))
 
     def test_sequential_context_uses_only_prior_results(self):
         team_matches = pd.DataFrame(

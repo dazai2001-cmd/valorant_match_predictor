@@ -197,8 +197,8 @@ def predict_player_ratings(
         )
         matches = clean_matches(
             filter_training_ready_matches(
-                filter_registry_tier1_matchups(
-                    filter_curated_competition_history(raw_matches)
+                filter_curated_competition_history(
+                    filter_registry_tier1_matchups(raw_matches)
                 )
             )
         )

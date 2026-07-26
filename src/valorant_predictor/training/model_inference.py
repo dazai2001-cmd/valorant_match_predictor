@@ -12,6 +12,7 @@ from ..features.form_calculations import (
     weighted_recent_mean,
 )
 from ..config import MAP_MODEL_PATH
+from ..prediction.simulation import series_probability_from_maps
 from ..features.team_context import (
     build_sequential_team_context,
     current_team_context,
@@ -23,10 +24,13 @@ from .train_models import (
     PLAYER_MODEL_PATH,
     TEAM_FEATURES,
     TEAM_MODEL_PATH,
+    ENSEMBLE_COMPONENT_COLUMNS,
+    apply_probability_calibration,
     apply_probability_blend_temperature,
     apply_symmetric_calibration,
     apply_team_anchored_map_correction,
     map_feature_frame,
+    reverse_team_feature_row,
     team_feature_row,
     team_rows_from_cleaned,
 )
@@ -266,6 +270,187 @@ def apply_player_model(
     return output
 
 
+def score_team_win_probability(
+    payload: dict,
+    features: dict,
+    reverse_features: dict | None = None,
+    map_probabilities: dict[str, float] | None = None,
+    best_of: int = 3,
+    map_order: list[str] | None = None,
+) -> tuple[float, dict]:
+    """Score prepared matchup features with the deployed symmetric series model."""
+    features = dict(features)
+    reverse_features = (
+        dict(reverse_features)
+        if reverse_features is not None
+        else reverse_team_feature_row(features)
+    )
+    map_probabilities = dict(map_probabilities or {})
+    feature_names = payload["features"]
+    for feature_name in feature_names:
+        features.setdefault(feature_name, 0.0)
+        reverse_features.setdefault(feature_name, 0.0)
+    x = pd.DataFrame([features])[feature_names].fillna(0.0)
+    elo_probability = float(features.get("elo_probability", 0.5))
+    probability_anchor = float(payload.get("probability_anchor", elo_probability))
+    model_kind = payload.get("model_kind", "residual")
+    metrics = payload.get("metadata", {}).get("team_metrics", {})
+    active_for_predictions = bool(
+        metrics.get("active_for_predictions", metrics.get("enabled", True))
+    )
+    effective_baseline = model_kind == "baseline" or not active_for_predictions
+    if effective_baseline:
+        raw_probability = elo_probability
+        raw_residual = 0.0
+    else:
+        prediction_frame = x
+        if payload.get("enforce_team_symmetry", False):
+            prediction_frame = pd.DataFrame(
+                [features, reverse_features]
+            )[feature_names].fillna(0.0)
+        if model_kind == "classifier":
+            raw_values = payload["model"].predict_proba(prediction_frame)[:, 1]
+        else:
+            raw_values = probability_anchor + payload["model"].predict(prediction_frame)
+        raw_values = np.clip(raw_values, 0.02, 0.98)
+        raw_probability = float(raw_values[0])
+        if len(raw_values) == 2:
+            raw_probability = float(
+                0.5 * (raw_values[0] + 1.0 - raw_values[1])
+            )
+        raw_residual = raw_probability - probability_anchor
+    calibrator = payload.get("calibrator")
+    if effective_baseline:
+        probability = raw_probability
+    elif payload.get("probability_calibration"):
+        probability = float(
+            apply_probability_calibration(
+                payload["probability_calibration"],
+                [raw_probability],
+                [probability_anchor],
+            )[0]
+        )
+    elif "model_blend_weight" in payload:
+        probability = float(
+            apply_probability_blend_temperature(
+                [raw_probability],
+                [probability_anchor],
+                blend_weight=payload.get("model_blend_weight", 1.0),
+                temperature=payload.get("probability_temperature", 1.0),
+                max_model_delta=payload.get("max_model_delta", 0.20),
+            )[0]
+        )
+    else:
+        probability = float(
+            apply_symmetric_calibration(calibrator, [raw_probability])[0]
+        )
+    direct_probability = probability
+
+    ensemble_payload = payload.get("ensemble") or {}
+    ensemble_used = bool(
+        ensemble_payload.get("active", False)
+        and not effective_baseline
+        and ensemble_payload.get("model") is not None
+    )
+    if ensemble_used:
+        lineup_payload = ensemble_payload.get("lineup") or {}
+        lineup_model = lineup_payload.get("model")
+        lineup_features = lineup_payload.get("features", [])
+        lineup_probability = 0.5
+        if lineup_model is not None and lineup_features:
+            lineup_forward = pd.DataFrame([features]).reindex(
+                columns=lineup_features,
+                fill_value=0.0,
+            ).fillna(0.0)
+            lineup_reverse = pd.DataFrame([reverse_features]).reindex(
+                columns=lineup_features,
+                fill_value=0.0,
+            ).fillna(0.0)
+            lineup_values = lineup_model.predict_proba(
+                pd.concat([lineup_forward, lineup_reverse], ignore_index=True)
+            )[:, 1]
+            lineup_raw = float(
+                0.5 * (lineup_values[0] + 1.0 - lineup_values[1])
+            )
+            lineup_probability = float(
+                apply_probability_calibration(
+                    lineup_payload.get("calibration"),
+                    [lineup_raw],
+                    [0.5],
+                )[0]
+            )
+
+        resolved_best_of = int(best_of) if int(best_of) in {1, 3, 5} else 3
+        estimated_order = features.get("likely_map_order", [])
+        resolved_order = map_order or (
+            estimated_order if isinstance(estimated_order, list) else None
+        )
+        map_derived_probability = (
+            series_probability_from_maps(
+                map_probabilities,
+                resolved_best_of,
+                map_order=resolved_order,
+            )
+            if map_probabilities
+            else elo_probability
+        )
+        component_values = {
+            "direct_oof_series_probability": direct_probability,
+            "map_derived_series_probability": map_derived_probability,
+            "elo_probability": elo_probability,
+            "lineup_oof_probability": lineup_probability,
+        }
+        component_forward = np.asarray(
+            [component_values[name] for name in ENSEMBLE_COMPONENT_COLUMNS],
+            dtype=float,
+        )
+        component_frame = pd.DataFrame(
+            np.vstack((component_forward, 1.0 - component_forward)),
+            columns=ENSEMBLE_COMPONENT_COLUMNS,
+        )
+        clipped_components = np.clip(
+            component_frame.to_numpy(dtype=float),
+            0.001,
+            0.999,
+        )
+        ensemble_x = pd.DataFrame(
+            np.log(clipped_components / (1.0 - clipped_components)),
+            columns=ENSEMBLE_COMPONENT_COLUMNS,
+        )
+        ensemble_values = ensemble_payload["model"].predict_proba(ensemble_x)[:, 1]
+        ensemble_raw = float(
+            0.5 * (ensemble_values[0] + 1.0 - ensemble_values[1])
+        )
+        probability = float(
+            apply_probability_calibration(
+                ensemble_payload.get("calibration"),
+                [ensemble_raw],
+                [0.5],
+            )[0]
+        )
+        features["ensemble_components"] = component_values
+        features["ensemble_raw_probability"] = ensemble_raw
+    features["raw_model_probability"] = raw_probability
+    features["raw_model_residual"] = raw_residual
+    features["raw_model_delta_from_elo"] = raw_probability - elo_probability
+    features["model_probability_anchor"] = probability_anchor
+    features["model_reliability"] = metrics.get("model_reliability", 0.0)
+    features["active_model_candidate"] = metrics.get("selected_candidate", "")
+    features["manual_model_override"] = metrics.get("selection_mode") == "manual"
+    features["active_model_is_baseline"] = effective_baseline
+    features["ensemble_used"] = ensemble_used
+    features["direct_model_probability"] = direct_probability
+    features["team_model_deployment_weight"] = (
+        1.0
+        if model_kind == "baseline"
+        else 0.0
+        if not active_for_predictions
+        else 1.0
+    )
+    features["map_probabilities"] = map_probabilities
+    return probability, features
+
+
 def predict_team_win_probability(
     matches: pd.DataFrame,
     team1: str,
@@ -274,8 +459,11 @@ def predict_team_win_probability(
     lineup2: set[str] | None = None,
     team_maps: pd.DataFrame | None = None,
     sequential_context: dict | None = None,
+    player_stack_features: dict | None = None,
     target_date=None,
     current_patch: str = "",
+    best_of: int = 3,
+    map_order: list[str] | None = None,
     model_path: str = TEAM_MODEL_PATH,
 ) -> tuple[float | None, dict | None]:
     payload = load_model_payload(model_path)
@@ -320,43 +508,26 @@ def predict_team_win_probability(
     )
     map_probabilities = sequential.pop("map_probabilities", {})
     features.update(sequential)
-
-    x = pd.DataFrame([features])[payload["features"]].fillna(0.0)
-    elo_probability = float(features.get("elo_probability", 0.5))
-    model_kind = payload.get("model_kind", "residual")
-    if model_kind == "baseline":
-        raw_probability = elo_probability
-        raw_residual = 0.0
-    elif model_kind == "classifier":
-        raw_probability = float(payload["model"].predict_proba(x)[0, 1])
-        raw_residual = raw_probability - elo_probability
-    else:
-        raw_residual = float(payload["model"].predict(x)[0])
-        raw_probability = min(0.97, max(0.03, elo_probability + raw_residual))
-    calibrator = payload.get("calibrator")
-    if model_kind == "baseline":
-        probability = raw_probability
-    elif "model_blend_weight" in payload:
-        probability = float(
-            apply_probability_blend_temperature(
-                [raw_probability],
-                [elo_probability],
-                blend_weight=payload.get("model_blend_weight", 1.0),
-                temperature=payload.get("probability_temperature", 1.0),
-                max_model_delta=payload.get("max_model_delta", 0.20),
-            )[0]
+    stacked_player_context = {
+        name: float((player_stack_features or {}).get(name, 0.0) or 0.0)
+        for name in TEAM_FEATURES
+        if name.startswith("player_projection_")
+    }
+    features.update(stacked_player_context)
+    reverse_features = team_feature_row(team_maps, target, team2, team1)
+    if reverse_features is not None:
+        reverse_features.update(
+            reverse_team_feature_row({**sequential, **stacked_player_context})
         )
-    else:
-        probability = float(apply_symmetric_calibration(calibrator, [raw_probability])[0])
-    metrics = payload.get("metadata", {}).get("team_metrics", {})
-    features["raw_model_probability"] = raw_probability
-    features["raw_model_residual"] = raw_residual
-    features["model_reliability"] = metrics.get("model_reliability", 0.0)
-    features["active_model_candidate"] = metrics.get("selected_candidate", "")
-    features["manual_model_override"] = metrics.get("selection_mode") == "manual"
-    features["active_model_is_baseline"] = model_kind == "baseline"
-    features["map_probabilities"] = map_probabilities
-    return probability, features
+
+    return score_team_win_probability(
+        payload,
+        features,
+        reverse_features=reverse_features,
+        map_probabilities=map_probabilities,
+        best_of=best_of,
+        map_order=map_order,
+    )
 
 
 def predict_map_win_probabilities(
@@ -405,6 +576,9 @@ def predict_map_win_probabilities(
             "map_name": map_name,
             "map_number": float(index),
             "map_team_anchor_probability": team_anchor_probability,
+            "map_team_anchor_oof_available": float(
+                team_features.get("team_model_deployment_weight", 0.0) > 0.0
+            ),
             "map_baseline_probability": baseline_probability,
             "map_signal_probability": float(
                 map_signal_probabilities.get(map_name, baseline_probability)
