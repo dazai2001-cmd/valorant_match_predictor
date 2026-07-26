@@ -160,6 +160,16 @@ It prints:
 
 ## Web App
 
+### Screenshots
+
+**Desktop overview**
+
+![Valorant Match Predictor desktop interface](docs/screenshots/web-app-desktop.png)
+
+**Mobile prediction**
+
+<img src="docs/screenshots/web-app-mobile.png" alt="Valorant Match Predictor mobile prediction" width="375">
+
 Run the Flask app:
 
 ```powershell
