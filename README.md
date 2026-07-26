@@ -170,6 +170,18 @@ It prints:
 
 <img src="docs/screenshots/web-app-mobile.png" alt="Valorant Match Predictor mobile prediction" width="375">
 
+**Team power rankings**
+
+![Global and regional team power rankings](docs/screenshots/web-app-team-rankings.png)
+
+**Database update**
+
+![Database update controls and data coverage](docs/screenshots/web-app-database-update.png)
+
+**Training and evaluation**
+
+![Training status and model evaluation metrics](docs/screenshots/web-app-training-evaluation.png)
+
 Run the Flask app:
 
 ```powershell
